@@ -11,3 +11,6 @@ __pycache__/
 # Docker crap
 *.log
 docker-compose.override.yml
+
+# Visual Code
+.vscode/

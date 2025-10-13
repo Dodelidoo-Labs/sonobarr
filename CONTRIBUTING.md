@@ -1,4 +1,4 @@
-# Contributing
+# Contributing 
 
 1. Clone the repository.
 2. Checkout the `develop` branch: `git checkout develop`.

@@ -9,7 +9,7 @@
 Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph to surface artists you'll actually like. It runs as a Flask + Socket.IO application, ships with a polished Bootstrap UI, and includes admin tooling so folks can share a single instance safely.
 
 <p align="center">
-  <img src="/src/static/sonobarr.png" alt="Sonobarr logo">
+  <img src="https://inubes.app/apps/files_sharing/publicpreview/5j6WJYrCGcBijdo?file=/&fileId=27122&x=3840&y=2160&a=true&etag=e598390299bd52d0b98cf85a4d7aacee" alt="Sonobarr logo">
 </p>
 
 ---
@@ -201,12 +201,14 @@ The footer shows:
 ## Screenshots
 
 <p align="center">
-  <img src="/src/static/fetch-from-lidarr.png" alt="Fetching artists" width="95%">
-  <img src="/src/static/prehear-detail.png" alt="Audio preview modal" width="95%">
-  <img src="/src/static/bio-detail.png" alt="Artist biography" width="46%">
-  <img src="/src/static/settings-detail.png" alt="Settings modal" width="46%">
-  <img src="/src/static/card-detail.png" alt="Artist card" width="46%">
-  <img src="/src/static/card-detail-added.png" alt="Artist added to Lidarr" width="46%">
+  <img src="https://inubes.app/apps/files_sharing/publicpreview/6LQMEJWWxaP93Lz?file=/&fileId=27049&x=3840&y=2160&a=true&etag=c09db4470dc9f3ea6adca89d7e519aca" alt="Login Window" width="46%">
+  <img src="https://inubes.app/apps/files_sharing/publicpreview/awtmqFTk4gddC4q?file=/&fileId=27051&x=3840&y=2160&a=true&etag=a054127eb80304f9ee6d1f5037e967d3" alt="Profile Settings" width="46%">
+  <img src="https://inubes.app/apps/files_sharing/publicpreview/YD7SnFBwzoKcxrT?file=/&fileId=27064&x=3840&y=2160&a=true&etag=42d6f455b8d9528d97fbb85ec8fb51cb" alt="User Admin" width="46%">
+  <img src="https://inubes.app/apps/files_sharing/publicpreview/YESTFRzJyH4AWwg?file=/&fileId=27046&x=3840&y=2160&a=true&etag=e279e593823bd55468450673a4e1b71a" alt="Configuration" width="46%">
+  <img src="https://inubes.app/apps/files_sharing/publicpreview/CPd6anAATKAmboR?file=/&fileId=27047&x=3840&y=2160&a=true&etag=b4babd5f0b45245530ccbca71d73770d" alt="Configuration" width="46%">
+  <img src="https://inubes.app/apps/files_sharing/publicpreview/NgErxcLzKEaGAt2?file=/&fileId=27038&x=3840&y=2160&a=true&etag=0cfde7b7b3d91ccecd58a708d5d4cd14" alt="AI Assist" width="46%">
+  <img src="https://inubes.app/apps/files_sharing/publicpreview/x8eLQmmQjk76ddy?file=/&fileId=27045&x=3840&y=2160&a=true&etag=1f5bcc01a182f3beb87b587c9aaafb9b" alt="Artist Suggestions" width="46%">
+  <img src="https://inubes.app/apps/files_sharing/publicpreview/bGH8wcnX3YofGdZ?file=/&fileId=27050&x=3840&y=2160&a=true&etag=edcb5d90429848ef0e2c3e0a9933e3aa" alt="Pre Hear" width="46%">
 </p>
 
 ---

@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Fixed
+- GitHub 429 on images by loading the Screenshots from an external domain
+
 ## [0.9.0] - 2025-10-13
 ### Added
 - Add REST API with API key auth.

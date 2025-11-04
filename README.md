@@ -41,7 +41,7 @@ Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph t
 - 🛡️ **Hardened configuration** – atomic settings writes, locked-down file permissions, and CSRF-protected forms keep secrets safe.
 - 🔔 **Update & schema self-healing** – footer badges surface new releases and the app backfills missing DB columns before loading users.
 - 🐳 **Docker-first deployment** – official GHCR image, rootless-friendly UID/GID mapping, and automatic migrations on start.
-- 🌐 Public API – REST API for integrating external tools such as custom dashboards (Documentation upcoming).
+- 🌐 Public API – REST API for integrating external tools such as custom dashboards (Documentation upcoming, for now study `/api/docs/` on your instance).
 
 
 ---
@@ -151,7 +151,7 @@ All variables can be supplied in lowercase (preferred for `.env`) or uppercase (
 | `youtube_api_key` | – | Enables YouTube previews in the “Listen” modal. Optional but recommended. |
 | `openai_api_key` | – | Optional key for your OpenAI-compatible provider. Leave empty if your endpoint allows anonymous access. |
 | `openai_model` | `gpt-4o-mini` | Override the model slug sent to the provider. |
-| `openai_api_base` | – | Custom base URL for LiteLLM, Azure OpenAI, self-hosted Ollama gateways, etc. Blank uses the SDK default. |
+| `openai_api_base` | – | Custom base URL for LiteLLM, Azure OpenAI, self-hosted Ollama gateways, etc. Blank uses the SDK default. **Must be complete base url such as `http://IP:PORT/v1` for example. |
 | `openai_extra_headers` | – | JSON object of additional headers sent with every LLM call (e.g., custom auth or routing hints). |
 | `openai_max_seed_artists` | `5` | Maximum number of seed artists returned from each AI prompt. |
 | `similar_artist_batch_size` | `10` | Number of cards sent per batch while streaming results. |

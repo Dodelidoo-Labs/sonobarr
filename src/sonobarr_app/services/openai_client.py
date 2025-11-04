@@ -37,6 +37,9 @@ class OpenAIRecommender:
         }
         if api_key is not None:
             client_kwargs["api_key"] = api_key or None
+        elif base_url:
+            # OpenAI Python SDK insists on an api_key; use a benign placeholder for keyless endpoints.
+            client_kwargs["api_key"] = "not-provided"
         if base_url:
             client_kwargs["base_url"] = base_url
         if default_headers:

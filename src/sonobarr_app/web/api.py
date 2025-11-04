@@ -123,9 +123,11 @@ def status():
         # Get data handler for Lidarr status
         data_handler = current_app.extensions.get("data_handler")
         lidarr_connected = False
+        llm_connected = False
         if data_handler:
             # Simple check - if we have cached Lidarr data, assume connected
             lidarr_connected = bool(data_handler.cached_lidarr_names)
+            llm_connected = bool(getattr(data_handler, "openai_recommender", None))
 
         return jsonify(
             {
@@ -133,7 +135,10 @@ def status():
                 "version": current_app.config.get("APP_VERSION", "unknown"),
                 "users": {"total": user_count, "admins": admin_count},
                 "artist_requests": {"total": total_requests, "pending": pending_requests},
-                "services": {"lidarr_connected": lidarr_connected},
+                "services": {
+                    "lidarr_connected": lidarr_connected,
+                    "llm_connected": llm_connected,
+                },
             }
         )
     except Exception as e:

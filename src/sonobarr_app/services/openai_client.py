@@ -1,6 +1,6 @@
 import json
 import re
-from typing import List, Optional, Sequence
+from typing import Any, List, Mapping, Optional, Sequence
 
 from openai import OpenAI
 from openai import OpenAIError
@@ -23,17 +23,33 @@ class OpenAIRecommender:
     def __init__(
         self,
         *,
-        api_key: str,
+        api_key: str | None,
         model: str | None = None,
+        base_url: str | None = None,
+        default_headers: Mapping[str, str] | None = None,
         max_seed_artists: int = DEFAULT_MAX_SEED_ARTISTS,
         timeout: float | None = DEFAULT_OPENAI_TIMEOUT,
         temperature: float | None = 0.7,
     ) -> None:
         self.timeout = timeout
-        self.client = OpenAI(api_key=api_key, timeout=timeout)
+        client_kwargs: dict[str, Any] = {
+            "timeout": timeout,
+        }
+        if api_key is not None:
+            client_kwargs["api_key"] = api_key or None
+        elif base_url:
+            # OpenAI Python SDK insists on an api_key; use a benign placeholder for keyless endpoints.
+            client_kwargs["api_key"] = "not-provided"
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        if default_headers:
+            client_kwargs["default_headers"] = dict(default_headers)
+        self.client = OpenAI(**client_kwargs)
         self.model = model or DEFAULT_OPENAI_MODEL
         self.max_seed_artists = max_seed_artists
         self.temperature = temperature
+        self.base_url = base_url
+        self.default_headers = dict(default_headers) if default_headers else {}
 
     @staticmethod
     def _iter_fenced_code_blocks(text: str):
@@ -144,14 +160,14 @@ class OpenAIRecommender:
                 raise RuntimeError(message) from exc
         if last_exc is not None:  # pragma: no cover - defensive
             raise RuntimeError(str(last_exc)) from last_exc
-        raise RuntimeError("OpenAI request failed without response")  # pragma: no cover - defensive
+        raise RuntimeError("LLM request failed without response")  # pragma: no cover - defensive
 
     @staticmethod
     def _extract_response_content(response) -> str:
         try:
             content = response.choices[0].message.content
         except (AttributeError, IndexError, KeyError) as exc:
-            raise RuntimeError("Unexpected response format from OpenAI.") from exc
+            raise RuntimeError("Unexpected response format from the LLM provider.") from exc
         return content or ""
 
     def _load_json_payload(self, array_fragment: str):
@@ -159,7 +175,7 @@ class OpenAIRecommender:
             return json.loads(array_fragment)
         except json.JSONDecodeError as exc:
             raise RuntimeError(
-                "OpenAI response was not valid JSON. "
+                "The LLM response was not valid JSON. "
                 "Please try rephrasing your request."
             ) from exc
 
@@ -171,7 +187,7 @@ class OpenAIRecommender:
             candidate_list = raw_data.get("artists") or raw_data.get("seeds")
             if isinstance(candidate_list, list):
                 return candidate_list
-        raise RuntimeError("OpenAI response JSON was not a list of artists.")
+        raise RuntimeError("The LLM response JSON was not a list of artists.")
 
     @staticmethod
     def _normalize_artist_entry(item) -> Optional[str]:
@@ -218,7 +234,7 @@ class OpenAIRecommender:
         array_fragment = self._extract_array_fragment(content)
         if not array_fragment:
             raise RuntimeError(
-                "OpenAI response did not include a JSON array of artist names. "
+                "The LLM response did not include a JSON array of artist names. "
                 "Please try rephrasing your request."
             )
 

@@ -29,7 +29,11 @@ const lidarr_api_key = document.getElementById('lidarr-api-key');
 const root_folder_path = document.getElementById('root-folder-path');
 const youtube_api_key = document.getElementById('youtube-api-key');
 const openai_api_key_input = document.getElementById('openai-api-key');
+const openai_api_base_input = document.getElementById('openai-api-base');
 const openai_model_input = document.getElementById('openai-model');
+const openai_extra_headers_input = document.getElementById(
+	'openai-extra-headers'
+);
 const openai_max_seed_artists_input = document.getElementById(
 	'openai-max-seed-artists'
 );
@@ -921,7 +925,13 @@ function build_settings_payload() {
 		root_folder_path: root_folder_path ? root_folder_path.value : '',
 		youtube_api_key: youtube_api_key ? youtube_api_key.value : '',
 		openai_api_key: openai_api_key_input ? openai_api_key_input.value : '',
+		openai_api_base: openai_api_base_input
+			? openai_api_base_input.value
+			: '',
 		openai_model: openai_model_input ? openai_model_input.value : '',
+		openai_extra_headers: openai_extra_headers_input
+			? openai_extra_headers_input.value
+			: '',
 		openai_max_seed_artists: openai_max_seed_artists_input
 			? openai_max_seed_artists_input.value
 			: '',
@@ -1068,8 +1078,14 @@ function populate_settings_form(settings) {
 	if (openai_api_key_input) {
 		openai_api_key_input.value = settings.openai_api_key || '';
 	}
+	if (openai_api_base_input) {
+		openai_api_base_input.value = settings.openai_api_base || '';
+	}
 	if (openai_model_input) {
 		openai_model_input.value = settings.openai_model || '';
+	}
+	if (openai_extra_headers_input) {
+		openai_extra_headers_input.value = settings.openai_extra_headers || '';
 	}
 	if (openai_max_seed_artists_input) {
 		const maxSeedArtists = settings.openai_max_seed_artists;

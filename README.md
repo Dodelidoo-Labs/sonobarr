@@ -33,7 +33,7 @@ Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph t
 
 - 🔌 **Deep Lidarr integration** – sync monitored artists, apply per-source monitor strategies, toggle monitor-new-albums policies, and send additions straight back to Lidarr.
 - 🧭 **Personal discovery hub** – stream batches sourced from your Lidarr library, your saved Last.fm scrobbles, and ListenBrainz Weekly Exploration playlists, all controllable from the sidebar.
-- 🤖 **AI assistant** – describe the vibe you want and let OpenAI seed new sessions with fresh artists, respecting optional library exclusions.
+- 🤖 **AI assistant** – describe the vibe you want and let any OpenAI-compatible model seed new sessions with fresh artists, respecting optional library exclusions.
 - 🙋 **Artist requests workflow** – non-admins raise requests, admins approve or reject with a single click, and every action is audited in real time.
 - 🎧 **Preview & context panels** – launch YouTube or iTunes previews, inspect Last.fm biographies, and read key stats without leaving the grid.
 - ⚡️ **Real-time UX** – Socket.IO keeps discovery progress, toast alerts, and button states in sync across every connected client.
@@ -41,7 +41,7 @@ Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph t
 - 🛡️ **Hardened configuration** – atomic settings writes, locked-down file permissions, and CSRF-protected forms keep secrets safe.
 - 🔔 **Update & schema self-healing** – footer badges surface new releases and the app backfills missing DB columns before loading users.
 - 🐳 **Docker-first deployment** – official GHCR image, rootless-friendly UID/GID mapping, and automatic migrations on start.
-- 🌐 Public API – REST API for integrating external tools such as custom dashboards (Documentation upcoming).
+- 🌐 Public API – REST API for integrating external tools such as custom dashboards (Documentation upcoming, for now study `/api/docs/` on your instance).
 
 
 ---
@@ -92,8 +92,9 @@ Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph t
    lidarr_api_key=xxxxxxxxxxxxxxxxxxxxxxxx
    last_fm_api_key=xxxxxxxxxxxxxxxxxxxxxxxx
    last_fm_api_secret=xxxxxxxxxxxxxxxxxxxxxxxx
-   # Optional – enables the AI assistant modal
-   # openai_api_key=sk-...
+  # Optional – enables the AI assistant modal (any OpenAI-compatible endpoint)
+  # openai_api_key=sk-...
+  # openai_api_base=https://api.openai.com/v1
    ```
    > All keys in `.env` are lowercase by convention; the app will happily accept uppercase equivalents if you prefer exporting variables.
 4. Start Sonobarr:
@@ -148,8 +149,10 @@ All variables can be supplied in lowercase (preferred for `.env`) or uppercase (
 | `last_fm_api_key` | – | Last.fm API key for similarity lookups. |
 | `last_fm_api_secret` | – | Last.fm API secret. |
 | `youtube_api_key` | – | Enables YouTube previews in the “Listen” modal. Optional but recommended. |
-| `openai_api_key` | – | Optional OpenAI key used by the AI Assist modal. Leave empty to disable the feature. |
-| `openai_model` | `gpt-4o-mini` | Override the OpenAI model used for prompts. |
+| `openai_api_key` | – | Optional key for your OpenAI-compatible provider. Leave empty if your endpoint allows anonymous access. |
+| `openai_model` | `gpt-4o-mini` | Override the model slug sent to the provider. |
+| `openai_api_base` | – | Custom base URL for LiteLLM, Azure OpenAI, self-hosted Ollama gateways, etc. Blank uses the SDK default. **Must be complete base url such as `http://IP:PORT/v1` for example. |
+| `openai_extra_headers` | – | JSON object of additional headers sent with every LLM call (e.g., custom auth or routing hints). |
 | `openai_max_seed_artists` | `5` | Maximum number of seed artists returned from each AI prompt. |
 | `similar_artist_batch_size` | `10` | Number of cards sent per batch while streaming results. |
 | `auto_start` | `false` | Automatically start a discovery session on load. |
@@ -188,7 +191,7 @@ Currently relying on manual testing. Contributions adding pytest coverage, espec
 
 - Click the **AI Assist** button on the top bar to open a prompt modal.
 - Describe the mood, genres, or examples you're craving (e.g. "dreamy synth-pop like M83 but calmer").
-- Provide an OpenAI API key through the settings modal (or `.env`) to unlock the feature; without a key the assistant stays disabled.
+- Provide an API key and/or base URL in the settings modal (.env works too) for whichever OpenAI-compatible provider you use; without valid credentials the assistant stays disabled.
 - The assistant picks a handful of seed artists, kicks off a discovery session automatically, and keeps streaming cards just like a normal Lidarr-driven search.
 
 The footer shows:

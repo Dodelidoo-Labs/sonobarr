@@ -117,6 +117,8 @@ class DataHandler:
         self.similar_artist_batch_size = 10
         self.openai_api_key = ""
         self.openai_model = ""
+        self.openai_api_base = ""
+        self.openai_extra_headers = ""
         self.openai_max_seed_artists = DEFAULT_MAX_SEED_ARTISTS
         self.api_key = ""
         self.lidarr_monitor_option = ""
@@ -224,6 +226,8 @@ class DataHandler:
             "youtube_api_key": "youtube_api_key",
             "openai_api_key": "openai_api_key",
             "openai_model": "openai_model",
+            "openai_api_base": "openai_api_base",
+            "openai_extra_headers": "openai_extra_headers",
             "last_fm_api_key": "last_fm_api_key",
             "last_fm_api_secret": "last_fm_api_secret",
             "api_key": "api_key",
@@ -538,7 +542,7 @@ class DataHandler:
             self.socketio.emit(
                 "ai_prompt_error",
                 {
-                    "message": "AI assistant isn't configured yet. Add an OpenAI API key in settings.",
+                    "message": "AI assistant isn't configured yet. Add an LLM API key or base URL in settings.",
                 },
                 room=sid,
             )
@@ -1261,6 +1265,8 @@ class DataHandler:
                 "auto_start_delay": self.auto_start_delay,
                 "openai_api_key": self.openai_api_key,
                 "openai_model": self.openai_model,
+                "openai_api_base": self.openai_api_base,
+                "openai_extra_headers": self.openai_extra_headers,
                 "openai_max_seed_artists": self.openai_max_seed_artists,
                 "api_key": self.api_key,
             }
@@ -1274,6 +1280,9 @@ class DataHandler:
             self._apply_int_settings(data)
             self._apply_float_settings(data)
             self._apply_bool_settings(data)
+            self.openai_extra_headers = self._normalize_openai_headers_field(
+                self.openai_extra_headers
+            )
 
             if "lidarr_monitor_option" in data:
                 self.lidarr_monitor_option = self._normalize_monitor_option(data.get("lidarr_monitor_option"))
@@ -1626,9 +1635,53 @@ class DataHandler:
         self.socketio.emit("initial_load_complete", {"hasMore": has_more}, room=sid)
         return True
 
+    def _normalize_openai_headers_field(self, value: Any) -> str:
+        if isinstance(value, dict):
+            try:
+                return json.dumps(value)
+            except (TypeError, ValueError):
+                self.logger.warning("Failed to serialize custom LLM headers; expected JSON-compatible data.")
+                return ""
+        if isinstance(value, str):
+            return value
+        if value is None:
+            return ""
+        return str(value)
+
+    def _parse_openai_extra_headers(self) -> Dict[str, str]:
+        raw_value = getattr(self, "openai_extra_headers", "")
+        if not raw_value:
+            return {}
+
+        if isinstance(raw_value, dict):
+            items = raw_value.items()
+        else:
+            raw_text = raw_value.strip() if isinstance(raw_value, str) else str(raw_value).strip()
+            if not raw_text:
+                return {}
+            try:
+                parsed = json.loads(raw_text)
+            except json.JSONDecodeError:
+                self.logger.warning("Ignoring LLM headers override; expected valid JSON object.")
+                return {}
+            if not isinstance(parsed, dict):
+                self.logger.warning("Ignoring LLM headers override; JSON must represent an object.")
+                return {}
+            items = parsed.items()
+
+        headers: Dict[str, str] = {}
+        for key, value in items:
+            key_str = str(key).strip()
+            if not key_str or value is None:
+                continue
+            headers[key_str] = str(value)
+        return headers
+
     def _configure_openai_client(self) -> None:
         api_key = (self.openai_api_key or "").strip()
-        if not api_key:
+        base_url = (self.openai_api_base or "").strip()
+        env_api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        if not any([api_key, base_url, env_api_key]):
             self.openai_recommender = None
             return
 
@@ -1642,14 +1695,18 @@ class DataHandler:
             max_seeds_int = DEFAULT_MAX_SEED_ARTISTS
         self.openai_max_seed_artists = max_seeds_int
 
+        headers_override = self._parse_openai_extra_headers()
+
         try:
             self.openai_recommender = OpenAIRecommender(
-                api_key=api_key,
+                api_key=api_key or None,
                 model=model,
+                base_url=base_url or None,
+                default_headers=headers_override or None,
                 max_seed_artists=max_seeds_int,
             )
         except Exception as exc:  # pragma: no cover - network/config errors
-            self.logger.error("Failed to initialize OpenAI client: %s", exc)
+            self.logger.error("Failed to initialize LLM client: %s", exc)
             self.openai_recommender = None
 
     def _configure_listening_services(self) -> None:
@@ -1696,6 +1753,8 @@ class DataHandler:
                 "similar_artist_batch_size": self.similar_artist_batch_size,
                 "openai_api_key": self.openai_api_key,
                 "openai_model": self.openai_model,
+                "openai_api_base": self.openai_api_base,
+                "openai_extra_headers": self.openai_extra_headers,
                 "openai_max_seed_artists": self.openai_max_seed_artists,
                 "api_key": self.api_key,
             }
@@ -1780,6 +1839,8 @@ class DataHandler:
             "similar_artist_batch_size": 10,
             "openai_api_key": "",
             "openai_model": "",
+            "openai_api_base": "",
+            "openai_extra_headers": "",
             "openai_max_seed_artists": DEFAULT_MAX_SEED_ARTISTS,
             "api_key": "",
             "sonobarr_superadmin_username": "admin",
@@ -1846,6 +1907,8 @@ class DataHandler:
         self.last_fm_api_secret = self._env("last_fm_api_secret")
         self.openai_api_key = self._env("openai_api_key")
         self.openai_model = self._env("openai_model")
+        self.openai_api_base = self._env("openai_api_base")
+        self.openai_extra_headers = self._env("openai_extra_headers")
         openai_max_seed = self._env("openai_max_seed_artists")
         self.openai_max_seed_artists = int(openai_max_seed) if openai_max_seed else ""
         self.api_key = self._env("api_key")
@@ -1881,6 +1944,8 @@ class DataHandler:
                             setattr(self, key, ret[key])
         except Exception as exc:  # pragma: no cover - filesystem errors
             self.logger.error(f"Error Loading Config: {exc}")
+
+        self.openai_extra_headers = self._normalize_openai_headers_field(self.openai_extra_headers)
 
         for key, value in default_settings.items():
             if getattr(self, key, "") == "":

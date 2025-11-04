@@ -168,14 +168,19 @@
               <small class="form-text text-muted">YouTube powers the preview player. Leave blank to fall back to iTunes samples.</small>
             </div>
             <div class="form-group-modal my-3">
-              <label for="openai-api-key">OpenAI API Key</label>
+              <label for="openai-api-key">LLM API Key</label>
               <input type="text" class="form-control" id="openai-api-key" placeholder="sk-...">
-              <small class="form-text text-muted">Leave blank to disable the AI Assist modal.</small>
+              <small class="form-text text-muted">Provide the key for OpenAI, Azure OpenAI, LiteLLM, or any compatible gateway. Leave blank if your endpoint does not require one.</small>
+            </div>
+            <div class="form-group-modal my-3">
+              <label for="openai-api-base">LLM API Base URL</label>
+              <input type="url" class="form-control" id="openai-api-base" placeholder="https://api.openai.com/v1">
+              <small class="form-text text-muted">Point Sonobarr at self-hosted or proxy endpoints; leave blank to use the SDK default.</small>
             </div>
             <div class="row g-3">
               <div class="col">
                 <div class="form-group-modal">
-                  <label for="openai-model">OpenAI Model</label>
+                  <label for="openai-model">LLM Model</label>
                   <input type="text" class="form-control" id="openai-model" placeholder="e.g., gpt-4o-mini">
                 </div>
               </div>
@@ -185,6 +190,11 @@
                   <input type="number" class="form-control" id="openai-max-seed-artists" min="1" step="1">
                 </div>
               </div>
+            </div>
+            <div class="form-group-modal my-3">
+              <label for="openai-extra-headers">LLM Extra Headers (JSON)</label>
+              <textarea class="form-control" id="openai-extra-headers" rows="2" placeholder='{"Authorization": "Bearer ..."}'></textarea>
+              <small class="form-text text-muted">Optional JSON object of additional headers, useful for custom auth or provider routing.</small>
             </div>
             <div class="form-group-modal my-3">
               <label for="api-key">API Key</label>

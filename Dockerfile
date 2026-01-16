@@ -26,6 +26,4 @@ RUN chmod 755 init.sh \
 	&& mkdir -p /sonobarr/config \
 	&& chown -R sonobarr:sonobarr /sonobarr/config
 
-USER sonobarr
-
 ENTRYPOINT ["./init.sh"]

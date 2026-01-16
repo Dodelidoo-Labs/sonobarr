@@ -6,7 +6,7 @@
 [![Container](https://img.shields.io/badge/GHCR-sonobarr-blue?logo=github)](https://github.com/Dodelidoo-Labs/sonobarr/pkgs/container/sonobarr)
 [![License](https://img.shields.io/github/license/Dodelidoo-Labs/sonobarr)](./LICENSE)
 
-Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph to surface artists you'll actually like. It runs as a Flask + Socket.IO application, ships with a polished Bootstrap UI, and includes admin tooling so folks can share a single instance safely.
+Sonobarr marries your existing Lidarr library with Last.fm's discovery graph to surface artists you'll actually like. It runs as a Flask + Socket.IO application, ships with a polished Bootstrap UI, and includes admin tooling so folks can share a single instance safely.
 
 <p align="center">
   <img src="https://inubes.app/apps/files_sharing/publicpreview/5j6WJYrCGcBijdo?file=/&fileId=27122&x=3840&y=2160&a=true&etag=e598390299bd52d0b98cf85a4d7aacee" alt="Sonobarr logo">
@@ -31,17 +31,17 @@ Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph t
 
 ## Features at a glance
 
-- 🔌 **Deep Lidarr integration** – sync monitored artists, apply per-source monitor strategies, toggle monitor-new-albums policies, and send additions straight back to Lidarr.
-- 🧭 **Personal discovery hub** – stream batches sourced from your Lidarr library, your saved Last.fm scrobbles, and ListenBrainz Weekly Exploration playlists, all controllable from the sidebar.
-- 🤖 **AI assistant** – describe the vibe you want and let any OpenAI-compatible model seed new sessions with fresh artists, respecting optional library exclusions.
-- 🙋 **Artist requests workflow** – non-admins raise requests, admins approve or reject with a single click, and every action is audited in real time.
-- 🎧 **Preview & context panels** – launch YouTube or iTunes previews, inspect Last.fm biographies, and read key stats without leaving the grid.
-- ⚡️ **Real-time UX** – Socket.IO keeps discovery progress, toast alerts, and button states in sync across every connected client.
-- 👥 **Role-based access** – authentication, user management, profile controls for personal services, and admin-only settings live in one UI.
-- 🛡️ **Hardened configuration** – atomic settings writes, locked-down file permissions, and CSRF-protected forms keep secrets safe.
-- 🔔 **Update & schema self-healing** – footer badges surface new releases and the app backfills missing DB columns before loading users.
-- 🐳 **Docker-first deployment** – official GHCR image, rootless-friendly UID/GID mapping, and automatic migrations on start.
-- 🌐 Public API – REST API for integrating external tools such as custom dashboards (Documentation upcoming, for now study `/api/docs/` on your instance).
+- 🔌 **Deep Lidarr integration** - sync monitored artists, apply per-source monitor strategies, toggle monitor-new-albums policies, and send additions straight back to Lidarr.
+- 🧭 **Personal discovery hub** - stream batches sourced from your Lidarr library, your saved Last.fm scrobbles, and ListenBrainz Weekly Exploration playlists, all controllable from the sidebar.
+- 🤖 **AI assistant** - describe the vibe you want and let any OpenAI-compatible model seed new sessions with fresh artists, respecting optional library exclusions.
+- 🙋 **Artist requests workflow** - non-admins raise requests, admins approve or reject with a single click, and every action is audited in real time.
+- 🎧 **Preview & context panels** - launch YouTube or iTunes previews, inspect Last.fm biographies, and read key stats without leaving the grid.
+- ⚡️ **Real-time UX** - Socket.IO keeps discovery progress, toast alerts, and button states in sync across every connected client.
+- 👥 **Role-based access** - authentication, user management, profile controls for personal services, and admin-only settings live in one UI.
+- 🛡️ **Hardened configuration** - atomic settings writes, locked-down file permissions, and CSRF-protected forms keep secrets safe.
+- 🔔 **Update & schema self-healing** - footer badges surface new releases and the app backfills missing DB columns before loading users.
+- 🐳 **Docker-first deployment** - official GHCR image, rootless-friendly UID/GID mapping, and automatic migrations on start.
+- 🌐 Public API - REST API for integrating external tools such as custom dashboards (Documentation upcoming, for now study `/api/docs/` on your instance).
 
 
 ---
@@ -75,7 +75,7 @@ Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph t
 
 > 🐳 **Requirements**: Docker Engine ≥ 24, Docker Compose plugin, Last.fm API key, Lidarr API key.
 
-1. Create a working directory, cd into it, and make sure it’s owned by the UID/GID the container will use (defaults to `1000:1000`). This keeps every file the container writes accessible to you:
+1. Create a working directory, cd into it, and make sure it's owned by the UID/GID the container will use (defaults to `1000:1000`, configurable via `PUID`/`PGID`). The container starts as root to fix permissions, then drops privileges to `PUID`/`PGID`:
    ```bash
    mkdir -p sonobarr && cd sonobarr
    sudo chown -R 1000:1000 .
@@ -85,16 +85,15 @@ Sonobarr marries your existing Lidarr library with Last.fm’s discovery graph t
    curl -L https://raw.githubusercontent.com/Dodelidoo-Labs/sonobarr/develop/docker-compose.yml -o docker-compose.yml
    curl -L https://raw.githubusercontent.com/Dodelidoo-Labs/sonobarr/develop/.sample-env -o .env
    ```
-3. Open `.env` and populate **at least** these keys:
+3. Open `.env` and populate **at least** these keys (set `PUID`/`PGID` if you want a different container user):
    ```env
+   PUID=1000
+   PGID=1000
    secret_key=change-me-to-a-long-random-string
    lidarr_address=http://your-lidarr:8686
    lidarr_api_key=xxxxxxxxxxxxxxxxxxxxxxxx
    last_fm_api_key=xxxxxxxxxxxxxxxxxxxxxxxx
    last_fm_api_secret=xxxxxxxxxxxxxxxxxxxxxxxx
-  # Optional – enables the AI assistant modal (any OpenAI-compatible endpoint)
-  # openai_api_key=sk-...
-  # openai_api_base=https://api.openai.com/v1
    ```
    > All keys in `.env` are lowercase by convention; the app will happily accept uppercase equivalents if you prefer exporting variables.
 4. Start Sonobarr:
@@ -136,23 +135,23 @@ All variables can be supplied in lowercase (preferred for `.env`) or uppercase (
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `secret_key` (**required**) | – | Flask session signing key. Must be a long random string; store it in `.env` so sessions survive restarts. |
+| `secret_key` (**required**) | - | Flask session signing key. Must be a long random string; store it in `.env` so sessions survive restarts. |
 | `lidarr_address` | `http://192.168.1.1:8686` | Base URL of your Lidarr instance. |
-| `lidarr_api_key` | – | Lidarr API key for artist lookups and additions. |
-| `root_folder_path` | `/data/media/music/` | Default root path used when adding new artists in Lidarr. |
+| `lidarr_api_key` | - | Lidarr API key for artist lookups and additions. |
+| `root_folder_path` | `/data/media/music/` | Default root path used when adding new artists in Lidarr (see [issue #2](https://github.com/Dodelidoo-Labs/sonobarr/issues/2)). |
 | `lidarr_api_timeout` | `120` | Seconds to wait for Lidarr before timing out requests. |
 | `quality_profile_id` | `1` | Numeric profile ID from Lidarr (see [issue #1](https://github.com/Dodelidoo-Labs/sonobarr/issues/1)). |
 | `metadata_profile_id` | `1` | Numeric metadata profile ID. |
 | `fallback_to_top_result` | `false` | When MusicBrainz finds no strong match, fall back to the first Lidarr search result. |
-| `search_for_missing_albums` | `false` | Toggle Lidarr’s “search for missing” flag when adding an artist. |
+| `search_for_missing_albums` | `false` | Toggle Lidarr's "search for missing" flag when adding an artist. |
 | `dry_run_adding_to_lidarr` | `false` | If `true`, Sonobarr will simulate additions without calling Lidarr. |
-| `last_fm_api_key` | – | Last.fm API key for similarity lookups. |
-| `last_fm_api_secret` | – | Last.fm API secret. |
-| `youtube_api_key` | – | Enables YouTube previews in the “Listen” modal. Optional but recommended. |
-| `openai_api_key` | – | Optional key for your OpenAI-compatible provider. Leave empty if your endpoint allows anonymous access. |
+| `last_fm_api_key` | - | Last.fm API key for similarity lookups. |
+| `last_fm_api_secret` | - | Last.fm API secret. |
+| `youtube_api_key` | - | Enables YouTube previews in the "Listen" modal. Optional but recommended. |
+| `openai_api_key` | - | Optional key for your OpenAI-compatible provider. Leave empty if your endpoint allows anonymous access. |
 | `openai_model` | `gpt-4o-mini` | Override the model slug sent to the provider. |
-| `openai_api_base` | – | Custom base URL for LiteLLM, Azure OpenAI, self-hosted Ollama gateways, etc. Blank uses the SDK default. **Must be complete base url such as `http://IP:PORT/v1` for example. |
-| `openai_extra_headers` | – | JSON object of additional headers sent with every LLM call (e.g., custom auth or routing hints). |
+| `openai_api_base` | - | Custom base URL for LiteLLM, Azure OpenAI, self-hosted Ollama gateways, etc. Blank uses the SDK default. **Must be complete base url such as `http://IP:PORT/v1` for example. |
+| `openai_extra_headers` | - | JSON object of additional headers sent with every LLM call (e.g., custom auth or routing hints). |
 | `openai_max_seed_artists` | `5` | Maximum number of seed artists returned from each AI prompt. |
 | `similar_artist_batch_size` | `10` | Number of cards sent per batch while streaming results. |
 | `auto_start` | `false` | Automatically start a discovery session on load. |
@@ -163,6 +162,8 @@ All variables can be supplied in lowercase (preferred for `.env`) or uppercase (
 | `sonobarr_superadmin_reset` | `false` | Set to `true` **once** to reapply the bootstrap credentials on next start. |
 | `release_version` | `unknown` | Populated automatically inside the Docker image; shown in the footer. No need to set manually. |
 | `sonobarr_config_dir` | `/sonobarr/config` | Override where Sonobarr writes `app.db`, `settings_config.json`, and migrations. |
+
+> ✅ Docker UID/GID mapping: set `PUID`/`PGID` in `.env`. The entrypoint fixes ownership and then drops privileges to that UID/GID.
 
 > ℹ️ `secret_key` is mandatory. If missing, the app refuses to boot to prevent insecure session cookies. With Docker Compose, make sure the key exists in `.env` and that `.env` is declared via `env_file:` as shown above.
 

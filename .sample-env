@@ -1,5 +1,9 @@
 secret_key=
 
+# Container user mapping (UID/GID)
+PUID=1000
+PGID=1000
+
 # Lidarr configuration
 lidarr_address=http://192.168.1.1:8686
 lidarr_api_key=

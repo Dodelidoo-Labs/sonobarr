@@ -29,7 +29,13 @@
 5. Make code changes in `src/` or other required files.
 6. Test the changes by restarting the docker image `sudo docker compose down && sudo docker compose up -d` and clearing cache in browser.
 7. Once ready to commit, make sure the build still works as well `sudo docker compose down -v --remove-orphans && sudo docker system prune -a --volumes -f && sudo docker compose up -d`.
-8. Commit your work to the `develop` branch.
+
+### Important
+- We only accept PR's, thus, open a Pull Request on the origin with your code changes against `develop` branch. 
+- A maintainer will always review both code and functionality (User Testing), discuss/approve and finally merge the changes.
+- All changes will be adequately credited in changelog. It is up to you to leave `by xxx` comments in the code. 
+- **Please only commit one feature per PR**.
+- If making substantial changes other than bug fixes please first open a Issue to discuss it.
 
 **Always test your changes with at least two accounts - admin and a common user - in the app, in at least two distinct browser builds (such as safari and chrome, for example).**
-**Remember that if you made changes affecting config (that is, database or configuration) you have to delete the `./config` folder before rebuilding or restarting the app.
+**Remember that if you made changes affecting config (that is, database or configuration) you have to delete the `./config` folder before rebuilding or restarting the app.**

@@ -7,7 +7,9 @@ flask_login
 flask_sqlalchemy
 Flask-Migrate
 Flask-WTF
+Werkzeug>=3.1.5
 requests
+urllib3>=2.6.3
 musicbrainzngs
 thefuzz
 Unidecode

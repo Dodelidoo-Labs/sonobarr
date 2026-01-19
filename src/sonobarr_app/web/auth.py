@@ -44,6 +44,8 @@ def _authenticate(username: str, password: str):
 
 @bp.get("/login")
 def login():
+    if current_app.config.get("OIDC_ONLY"):
+        return redirect(url_for('oidc_auth.login'))
     if current_user.is_authenticated:
         return redirect(url_for(_HOME_ENDPOINT))
     return render_template("login.html")
@@ -51,6 +53,9 @@ def login():
 
 @bp.post("/login")
 def login_submit():
+    if current_app.config.get("OIDC_ONLY"):
+        flash("Password login is disabled.", "warning")
+        return redirect(url_for('oidc_auth.login'))
     if current_user.is_authenticated:
         return redirect(url_for(_HOME_ENDPOINT))
 
@@ -66,5 +71,9 @@ def login_submit():
 @login_required
 def logout():
     logout_user()
-    flash("You have been signed out.", "info")
-    return redirect(url_for("auth.login"))
+    return redirect(url_for("auth.logged_out"))
+
+
+@bp.get("/logged-out")
+def logged_out():
+    return render_template("logged_out.html")

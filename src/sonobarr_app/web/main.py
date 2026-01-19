@@ -26,6 +26,32 @@ def _update_user_profile(form_data, user):
     user.lastfm_username = lastfm_username or None
     user.listenbrainz_username = listenbrainz_username or None
 
+    # Per-user API keys (optional overrides for global keys)
+    lastfm_api_key = (form_data.get("lastfm_api_key") or "").strip()
+    lastfm_api_secret = (form_data.get("lastfm_api_secret") or "").strip()
+    youtube_api_key = (form_data.get("youtube_api_key") or "").strip()
+    openai_api_key = (form_data.get("openai_api_key") or "").strip()
+    openai_api_base = (form_data.get("openai_api_base") or "").strip()
+    openai_model = (form_data.get("openai_model") or "").strip()
+    openai_extra_headers = (form_data.get("openai_extra_headers") or "").strip()
+    openai_max_seed_artists_raw = (form_data.get("openai_max_seed_artists") or "").strip()
+
+    user.lastfm_api_key = lastfm_api_key or None
+    user.lastfm_api_secret = lastfm_api_secret or None
+    user.youtube_api_key = youtube_api_key or None
+    user.openai_api_key = openai_api_key or None
+    user.openai_api_base = openai_api_base or None
+    user.openai_model = openai_model or None
+    user.openai_extra_headers = openai_extra_headers or None
+
+    if openai_max_seed_artists_raw:
+        try:
+            user.openai_max_seed_artists = int(openai_max_seed_artists_raw)
+        except ValueError:
+            user.openai_max_seed_artists = None
+    else:
+        user.openai_max_seed_artists = None
+
     new_password = form_data.get("new_password", "")
     confirm_password = form_data.get("confirm_password", "")
     current_password = form_data.get("current_password", "")

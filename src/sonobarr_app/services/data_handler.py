@@ -318,6 +318,110 @@ class DataHandler:
         except (TypeError, ValueError):
             return None
 
+    # Per-user API key getters with global fallback ----------------------
+    def get_lastfm_api_key(self, user: Optional[User] = None) -> str:
+        """Return user's Last.fm API key if set, else fall back to global."""
+        if user and getattr(user, 'lastfm_api_key', None):
+            return user.lastfm_api_key
+        return self.last_fm_api_key
+
+    def get_lastfm_api_secret(self, user: Optional[User] = None) -> str:
+        """Return user's Last.fm API secret if set, else fall back to global."""
+        if user and getattr(user, 'lastfm_api_secret', None):
+            return user.lastfm_api_secret
+        return self.last_fm_api_secret
+
+    def get_youtube_api_key(self, user: Optional[User] = None) -> str:
+        """Return user's YouTube API key if set, else fall back to global."""
+        if user and getattr(user, 'youtube_api_key', None):
+            return user.youtube_api_key
+        return self.youtube_api_key
+
+    def get_openai_api_key(self, user: Optional[User] = None) -> str:
+        """Return user's OpenAI API key if set, else fall back to global."""
+        if user and getattr(user, 'openai_api_key', None):
+            return user.openai_api_key
+        return self.openai_api_key
+
+    def get_openai_api_base(self, user: Optional[User] = None) -> str:
+        """Return user's OpenAI API base if set, else fall back to global."""
+        if user and getattr(user, 'openai_api_base', None):
+            return user.openai_api_base
+        return self.openai_api_base
+
+    def get_openai_model(self, user: Optional[User] = None) -> str:
+        """Return user's OpenAI model if set, else fall back to global."""
+        if user and getattr(user, 'openai_model', None):
+            return user.openai_model
+        return self.openai_model
+
+    def get_openai_extra_headers(self, user: Optional[User] = None) -> str:
+        """Return user's OpenAI extra headers if set, else fall back to global."""
+        if user and getattr(user, 'openai_extra_headers', None):
+            return user.openai_extra_headers
+        return self.openai_extra_headers
+
+    def get_openai_max_seed_artists(self, user: Optional[User] = None) -> int:
+        """Return user's OpenAI max seed artists if set, else fall back to global."""
+        if user and getattr(user, 'openai_max_seed_artists', None) is not None:
+            return user.openai_max_seed_artists
+        return self.openai_max_seed_artists
+
+    def get_openai_recommender_for_user(self, user: Optional[User] = None) -> Optional["OpenAIRecommender"]:
+        """
+        Get an OpenAI recommender configured for the user.
+        Uses user's API keys if set, otherwise falls back to global config.
+        Returns None if no API key is available.
+        """
+        api_key = (self.get_openai_api_key(user) or "").strip()
+        base_url = (self.get_openai_api_base(user) or "").strip()
+        env_api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+
+        if not any([api_key, base_url, env_api_key]):
+            return None
+
+        # If user has no custom keys, use the global recommender
+        user_has_custom_keys = user and (
+            getattr(user, 'openai_api_key', None) or
+            getattr(user, 'openai_api_base', None)
+        )
+        if not user_has_custom_keys and self.openai_recommender:
+            return self.openai_recommender
+
+        # Create a recommender with user's (or global) settings
+        model = (self.get_openai_model(user) or "").strip() or None
+        max_seeds = self.get_openai_max_seed_artists(user)
+        try:
+            max_seeds_int = int(max_seeds)
+        except (TypeError, ValueError):
+            max_seeds_int = DEFAULT_MAX_SEED_ARTISTS
+        if max_seeds_int <= 0:
+            max_seeds_int = DEFAULT_MAX_SEED_ARTISTS
+
+        # Parse extra headers
+        headers_raw = self.get_openai_extra_headers(user)
+        headers_override = {}
+        if headers_raw:
+            try:
+                import json
+                parsed = json.loads(headers_raw)
+                if isinstance(parsed, dict):
+                    headers_override = {str(k).strip(): str(v) for k, v in parsed.items() if k and v is not None}
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        try:
+            return OpenAIRecommender(
+                api_key=api_key or None,
+                model=model,
+                base_url=base_url or None,
+                default_headers=headers_override or None,
+                max_seed_artists=max_seeds_int,
+            )
+        except Exception as exc:
+            self.logger.error("Failed to initialize user LLM client: %s", exc)
+            return None
+
     def emit_personal_sources_state(self, sid: str) -> None:
         session = self.get_session_if_exists(sid)
         if session is None:
@@ -527,6 +631,7 @@ class DataHandler:
 
     def ai_prompt(self, sid: str, prompt: str) -> None:
         session = self.ensure_session(sid)
+        user = self._resolve_user(session.user_id)
         prompt_text = (prompt or "").strip()
         if not prompt_text:
             self.socketio.emit(
@@ -538,11 +643,13 @@ class DataHandler:
             )
             return
 
-        if not self.openai_recommender:
+        # Get recommender with user's API keys (or fallback to global)
+        recommender = self.get_openai_recommender_for_user(user)
+        if not recommender:
             self.socketio.emit(
                 "ai_prompt_error",
                 {
-                    "message": "AI assistant isn't configured yet. Add an LLM API key or base URL in settings.",
+                    "message": "AI assistant isn't configured yet. Add an LLM API key in settings or your profile.",
                 },
                 room=sid,
             )
@@ -553,8 +660,8 @@ class DataHandler:
             cleaned_library_names = set(self.cached_cleaned_lidarr_names)
 
         prompt_preview = prompt_text if len(prompt_text) <= 120 else f"{prompt_text[:117]}..."
-        model_name = getattr(self.openai_recommender, "model", "unknown")
-        timeout_value = getattr(self.openai_recommender, "timeout", None)
+        model_name = getattr(recommender, "model", "unknown")
+        timeout_value = getattr(recommender, "timeout", None)
         self.logger.info(
             "AI prompt started (model=%s, timeout=%s, library_size=%d, prompt=\"%s\")",
             model_name,
@@ -565,7 +672,7 @@ class DataHandler:
 
         start_time = time.perf_counter()
         try:
-            seeds = self.openai_recommender.generate_seed_artists(prompt_text, library_artists)
+            seeds = recommender.generate_seed_artists(prompt_text, library_artists)
         except Exception as exc:  # pragma: no cover - network errors
             elapsed = time.perf_counter() - start_time
             self.logger.error("AI prompt failed after %.2fs: %s", elapsed, exc)
@@ -1318,12 +1425,14 @@ class DataHandler:
     # Preview ---------------------------------------------------------
     def preview(self, sid: str, raw_artist_name: str) -> None:
         artist_name = urllib.parse.unquote(raw_artist_name)
+        session = self.ensure_session(sid)
+        user = self._resolve_user(session.user_id)
         try:
             preview_info: dict | str
             biography = None
             lfm = pylast.LastFMNetwork(
-                api_key=self.last_fm_api_key,
-                api_secret=self.last_fm_api_secret,
+                api_key=self.get_lastfm_api_key(user),
+                api_secret=self.get_lastfm_api_secret(user),
             )
             search_results = lfm.search_for_artist(artist_name)
             artists = search_results.get_next_page()
@@ -1356,11 +1465,13 @@ class DataHandler:
 
     def prehear(self, sid: str, raw_artist_name: str) -> None:
         artist_name = urllib.parse.unquote(raw_artist_name)
+        session = self.ensure_session(sid)
+        user = self._resolve_user(session.user_id)
         lfm = pylast.LastFMNetwork(
-            api_key=self.last_fm_api_key,
-            api_secret=self.last_fm_api_secret,
+            api_key=self.get_lastfm_api_key(user),
+            api_secret=self.get_lastfm_api_secret(user),
         )
-        yt_key = (self.youtube_api_key or "").strip()
+        yt_key = (self.get_youtube_api_key(user) or "").strip()
         result: dict[str, str] = {"error": "No sample found"}
         top_tracks = []
         try:

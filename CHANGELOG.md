@@ -4,9 +4,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.11.0] - 2026-01-21
+### Added
+- Add OIDC SSO integration with login flow by @tinkermesomething
+
+## [0.10.1] - 2026-01-16
+### Changed
+- Add UID/GID mapping and docs
+- small UI improvements
+
+### Security
+- Constrain python libraries to assure security
+
+## [0.10.0] - 2025-11-04
 ### Fixed
 - GitHub 429 on images by loading the Screenshots from an external domain
+
+### Changed
+- Update Readme and Changelog
+
+### Added
+- Add Swagger API docs and refactor app init
+- Adds LLM provider support and config options
 
 ## [0.9.0] - 2025-10-13
 ### Added

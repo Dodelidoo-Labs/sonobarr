@@ -29,6 +29,14 @@
             </div>
             <button type="submit" class="btn btn-primary w-100">Sign in</button>
           </form>
+          {% if config.get('OIDC_CLIENT_ID') %}
+          <div class="my-3 text-center">
+            <span class="text-muted small">or</span>
+          </div>
+          <a href="{{ url_for('oidc_auth.login') }}" class="btn btn-outline-secondary w-100">
+            Sign in with SSO
+          </a>
+          {% endif %}
           <p class="text-muted small mt-3 mb-0">
             Need help? Ask your Sonobarr administrator to create an account for you.
           </p>

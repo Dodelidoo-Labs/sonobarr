@@ -80,6 +80,55 @@ def _delete_user_from_form(form):
     flash(f"User '{user.username}' deleted.", "success")
 
 
+def _edit_user_from_form(form):
+    try:
+        user_id = int(form.get("user_id", "0"))
+    except ValueError:
+        flash("Invalid user id.", "danger")
+        return
+
+    user = User.query.get(user_id)
+    if not user:
+        flash("User not found.", "danger")
+        return
+
+    # Update basic fields
+    display_name = (form.get("display_name") or "").strip()
+    avatar_url = (form.get("avatar_url") or "").strip()
+    user.display_name = display_name or None
+    user.avatar_url = avatar_url or None
+
+    # Update active status
+    user.is_active = form.get("is_active") == "on"
+
+    # Update admin status with validation
+    new_admin_status = form.get("is_admin") == "on"
+
+    # Validate: can't remove last admin
+    if user.is_admin and not new_admin_status:
+        if User.query.filter_by(is_admin=True).count() <= 1:
+            flash("At least one administrator must remain.", "warning")
+            return
+
+    # Apply admin status change
+    if user.is_admin != new_admin_status:
+        user.is_admin = new_admin_status
+        status_text = "granted" if new_admin_status else "revoked"
+
+        # Warn if this is an OIDC user (will be synced on next login)
+        if user.oidc_id:
+            flash(
+                f"Admin privileges {status_text} for '{user.username}'. "
+                f"Note: This user authenticates via SSO and will be re-synced on next login.",
+                "warning"
+            )
+        else:
+            flash(f"Admin privileges {status_text} for '{user.username}'.", "success")
+
+    db.session.commit()
+    flash(f"User '{user.username}' updated.", "success")
+
+
 def _resolve_artist_request(form):
     request_id = form.get("request_id")
     if not request_id:
@@ -152,6 +201,8 @@ def modify_users():
     action = request.form.get("action")
     if action == "create":
         _create_user_from_form(request.form)
+    elif action == "edit":
+        _edit_user_from_form(request.form)
     elif action == "delete":
         _delete_user_from_form(request.form)
     else:

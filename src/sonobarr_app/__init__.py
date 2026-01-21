@@ -7,10 +7,11 @@ from typing import Any, Dict, Optional
 from flask import Flask, current_app
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import OperationalError, ProgrammingError
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .bootstrap import bootstrap_super_admin
 from .config import Config, STATIC_DIR, TEMPLATE_DIR
-from .extensions import csrf, db, login_manager, migrate, socketio
+from .extensions import csrf, db, login_manager, migrate, oidc, socketio
 from .services.data_handler import DataHandler
 from .services.releases import ReleaseClient
 from .sockets import register_socketio_handlers
@@ -74,10 +75,20 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     )
     app.config.from_object(config_class)
 
+    # Configure ProxyFix to trust reverse proxy headers (Caddy, nginx, etc.)
+    # This ensures Flask generates correct HTTPS URLs when behind a reverse proxy
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app,
+        x_for=1,
+        x_proto=1,
+        x_host=1,
+        x_prefix=1
+    )
+
     _configure_logging(app)
     _init_core_extensions(app)
     _register_user_loader()
-    
+
     data_handler = _initialize_services(app)
 
     # Blueprints ------------------------------------------------------
@@ -85,7 +96,9 @@ def create_app(config_class: type[Config] = Config) -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(api_bp, url_prefix="/api")
-    
+    from .web.oidc_auth import oidc_auth_bp
+    app.register_blueprint(oidc_auth_bp)
+
     # Swagger must be initialized AFTER blueprints are registered
     _configure_swagger(app)
 
@@ -144,6 +157,14 @@ def _init_core_extensions(app: Flask) -> None:
     login_manager.login_message_category = "warning"
     csrf.init_app(app)
     socketio.init_app(app, async_mode="gevent")
+    oidc.init_app(app)
+    oidc.register(
+        name='sonobarr',
+        client_id=app.config.get('OIDC_CLIENT_ID'),
+        client_secret=app.config.get('OIDC_CLIENT_SECRET'),
+        server_metadata_url=app.config.get('OIDC_SERVER_METADATA_URL'),
+        client_kwargs={'scope': 'openid email profile groups'}
+    )
 
 
 def _register_user_loader() -> None:

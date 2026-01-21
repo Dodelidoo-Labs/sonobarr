@@ -61,6 +61,7 @@
                 <tr>
                   <th scope="col">Username</th>
                   <th scope="col">Display name</th>
+                  <th scope="col">Auth</th>
                   <th scope="col">Role</th>
                   <th scope="col" class="text-end">Actions</th>
                 </tr>
@@ -71,6 +72,13 @@
                   <td>{{ user.username }}</td>
                   <td>{{ user.display_name or '—' }}</td>
                   <td>
+                    {% if user.oidc_id %}
+                    <span class="badge bg-info" title="Authenticates via OIDC SSO">OIDC</span>
+                    {% else %}
+                    <span class="badge bg-secondary" title="Local password authentication">Local</span>
+                    {% endif %}
+                  </td>
+                  <td>
                     {% if user.is_admin %}
                     <span class="badge bg-primary">Admin</span>
                     {% else %}
@@ -79,6 +87,16 @@
                   </td>
                   <td class="text-end">
                     {% if user.id != current_user.id %}
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editUserModal"
+                            data-user-id="{{ user.id }}"
+                            data-user-username="{{ user.username }}"
+                            data-user-displayname="{{ user.display_name or '' }}"
+                            data-user-avatarurl="{{ user.avatar_url or '' }}"
+                            data-user-isadmin="{{ 'true' if user.is_admin else 'false' }}"
+                            data-user-isactive="{{ 'true' if user.is_active else 'false' }}"
+                            data-user-isoidc="{{ 'true' if user.oidc_id else 'false' }}">
+                      Edit
+                    </button>
                     <form method="post" class="d-inline" onsubmit="return confirm('Delete {{ user.username }}?');">
                       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                       <input type="hidden" name="action" value="delete">
@@ -102,4 +120,87 @@
     </div>
   </div>
 </div>
+
+<!-- Edit User Modal -->
+<div class="modal fade" id="editUserModal" tabindex="-1" aria-labelledby="editUserModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="edit">
+        <input type="hidden" name="user_id" id="edit_user_id">
+
+        <div class="modal-header">
+          <h5 class="modal-title" id="editUserModalLabel">Edit User</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-bold">Username</label>
+            <p class="form-control-plaintext" id="edit_username_display"></p>
+          </div>
+
+          <div class="mb-3">
+            <label for="edit_display_name" class="form-label">Display name</label>
+            <input type="text" class="form-control" id="edit_display_name" name="display_name">
+          </div>
+
+          <div class="mb-3">
+            <label for="edit_avatar_url" class="form-label">Profile image URL</label>
+            <input type="url" class="form-control" id="edit_avatar_url" name="avatar_url" placeholder="https://example.com/avatar.png">
+          </div>
+
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="edit_is_active" name="is_active">
+            <label class="form-check-label" for="edit_is_active">Active account</label>
+          </div>
+
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" id="edit_is_admin" name="is_admin">
+            <label class="form-check-label" for="edit_is_admin">Admin privileges</label>
+          </div>
+
+          <div class="alert alert-warning py-2 px-3 small mb-0" id="oidc_warning" style="display: none;">
+            <strong>Note:</strong> This user authenticates via OIDC SSO. Admin status will be re-synced on their next login based on SSO group membership.
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+// Populate the edit modal with user data when opened
+document.getElementById('editUserModal').addEventListener('show.bs.modal', function (event) {
+  const button = event.relatedTarget;
+  const userId = button.getAttribute('data-user-id');
+  const username = button.getAttribute('data-user-username');
+  const displayName = button.getAttribute('data-user-displayname');
+  const avatarUrl = button.getAttribute('data-user-avatarurl');
+  const isAdmin = button.getAttribute('data-user-isadmin') === 'true';
+  const isActive = button.getAttribute('data-user-isactive') === 'true';
+  const isOidc = button.getAttribute('data-user-isoidc') === 'true';
+
+  document.getElementById('edit_user_id').value = userId;
+  document.getElementById('edit_username_display').textContent = username;
+  document.getElementById('edit_display_name').value = displayName;
+  document.getElementById('edit_avatar_url').value = avatarUrl;
+  document.getElementById('edit_is_admin').checked = isAdmin;
+  document.getElementById('edit_is_active').checked = isActive;
+
+  // Show/hide OIDC warning
+  const oidcWarning = document.getElementById('oidc_warning');
+  if (isOidc) {
+    oidcWarning.style.display = 'block';
+  } else {
+    oidcWarning.style.display = 'none';
+  }
+});
+</script>
 {% endblock %}

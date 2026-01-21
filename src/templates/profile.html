@@ -45,6 +45,54 @@
             </div>
             {% if not current_user.oidc_id %}
             <hr>
+            <p class="fw-semibold">External API Keys (optional)</p>
+            <p class="text-muted small">Override global API keys with your own. Leave blank to use the admin's global keys.</p>
+
+            <div class="mb-3">
+              <label for="lastfm_api_key" class="form-label">Last.fm API Key</label>
+              <input type="text" class="form-control" id="lastfm_api_key" name="lastfm_api_key"
+                     value="{{ current_user.lastfm_api_key or '' }}" placeholder="Your Last.fm API Key (optional)">
+            </div>
+            <div class="mb-3">
+              <label for="lastfm_api_secret" class="form-label">Last.fm API Secret</label>
+              <input type="text" class="form-control" id="lastfm_api_secret" name="lastfm_api_secret"
+                     value="{{ current_user.lastfm_api_secret or '' }}" placeholder="Your Last.fm API Secret (optional)">
+            </div>
+
+            <div class="mb-3">
+              <label for="youtube_api_key" class="form-label">YouTube API Key</label>
+              <input type="text" class="form-control" id="youtube_api_key" name="youtube_api_key"
+                     value="{{ current_user.youtube_api_key or '' }}" placeholder="Your YouTube API Key (optional)">
+              <div class="form-text">Powers the YouTube preview player. Falls back to iTunes samples if not set.</div>
+            </div>
+
+            <div class="mb-3">
+              <label for="openai_api_key" class="form-label">LLM API Key</label>
+              <input type="text" class="form-control" id="openai_api_key" name="openai_api_key"
+                     value="{{ current_user.openai_api_key or '' }}" placeholder="sk-... (optional)">
+              <div class="form-text">For OpenAI, Azure, or compatible providers. Leave blank to use admin's global key.</div>
+            </div>
+            <div class="mb-3">
+              <label for="openai_api_base" class="form-label">LLM API Base URL</label>
+              <input type="url" class="form-control" id="openai_api_base" name="openai_api_base"
+                     value="{{ current_user.openai_api_base or '' }}" placeholder="https://api.openai.com/v1 (optional)">
+            </div>
+            <div class="mb-3">
+              <label for="openai_model" class="form-label">LLM Model Name</label>
+              <input type="text" class="form-control" id="openai_model" name="openai_model"
+                     value="{{ current_user.openai_model or '' }}" placeholder="gpt-4o-mini (optional)">
+            </div>
+            <div class="mb-3">
+              <label for="openai_max_seed_artists" class="form-label">LLM Max Seed Artists</label>
+              <input type="number" class="form-control" id="openai_max_seed_artists" name="openai_max_seed_artists"
+                     value="{{ current_user.openai_max_seed_artists or '' }}" min="1" step="1" placeholder="5 (optional)">
+            </div>
+            <div class="mb-3">
+              <label for="openai_extra_headers" class="form-label">LLM Extra Headers (JSON)</label>
+              <textarea class="form-control" id="openai_extra_headers" name="openai_extra_headers" rows="2" placeholder='{"Authorization": "Bearer ..."} (optional)'
+              >{{ current_user.openai_extra_headers or '' }}</textarea>
+            </div>
+            <hr>
             <p class="fw-semibold">Change password</p>
             <div class="mb-3">
               <label for="current_password" class="form-label">Current password</label>

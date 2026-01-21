@@ -76,3 +76,10 @@ class Config:
 
     CONFIG_DIR = str(CONFIG_DIR_PATH)
     SETTINGS_FILE = str(SETTINGS_FILE_PATH)
+
+    # OIDC SSO Configuration
+    OIDC_CLIENT_ID = get_env_value("OIDC_CLIENT_ID")
+    OIDC_CLIENT_SECRET = get_env_value("OIDC_CLIENT_SECRET")
+    OIDC_SERVER_METADATA_URL = get_env_value("OIDC_SERVER_METADATA_URL")
+    OIDC_ADMIN_GROUP = get_env_value("OIDC_ADMIN_GROUP", "")
+    OIDC_ONLY = _get_bool("OIDC_ONLY", False)

@@ -844,27 +844,39 @@ function show_toast(header, message) {
 	});
 }
 
-return_to_top.addEventListener('click', function () {
-	window.scrollTo({ top: 0, behavior: 'smooth' });
-});
-
-lidarr_select_all_checkbox.addEventListener('change', function () {
-	var is_checked = this.checked;
-	var checkboxes = document.querySelectorAll('input[name="lidarr-item"]');
-	checkboxes.forEach(function (checkbox) {
-		checkbox.checked = is_checked;
+// Guard against null elements that only exist on main page (base.html)
+// These elements aren't present on other pages like User Management or Profile
+if (return_to_top) {
+	return_to_top.addEventListener('click', function () {
+		window.scrollTo({ top: 0, behavior: 'smooth' });
 	});
-});
+}
 
-lidarr_get_artists_button.addEventListener('click', function () {
-	lidarr_get_artists_button.disabled = true;
-	lidarr_spinner.classList.remove('d-none');
-	lidarr_status.textContent = 'Accessing Lidarr API';
-	lidarr_item_list.innerHTML = '';
-	socket.emit('get_lidarr_artists');
-});
+// Lidarr selection controls only exist on main page
+if (lidarr_select_all_checkbox) {
+	lidarr_select_all_checkbox.addEventListener('change', function () {
+		var is_checked = this.checked;
+		var checkboxes = document.querySelectorAll('input[name="lidarr-item"]');
+		checkboxes.forEach(function (checkbox) {
+			checkbox.checked = is_checked;
+		});
+	});
+}
 
-start_stop_button.addEventListener('click', function () {
+// Lidarr sync button only exists on main page
+if (lidarr_get_artists_button) {
+	lidarr_get_artists_button.addEventListener('click', function () {
+		lidarr_get_artists_button.disabled = true;
+		lidarr_spinner.classList.remove('d-none');
+		lidarr_status.textContent = 'Accessing Lidarr API';
+		lidarr_item_list.innerHTML = '';
+		socket.emit('get_lidarr_artists');
+	});
+}
+
+// Discovery control button only exists on main page
+if (start_stop_button) {
+	start_stop_button.addEventListener('click', function () {
 	var running_state =
 		start_stop_button.textContent.trim() === START_LABEL ? true : false;
 	if (running_state) {
@@ -904,7 +916,8 @@ start_stop_button.addEventListener('click', function () {
 		lidarr_select_all_checkbox.disabled = false;
 		socket.emit('stop_req');
 	}
-});
+	});
+}
 
 if (load_more_button) {
 	load_more_button.addEventListener('click', function () {
@@ -1181,10 +1194,13 @@ if (settings_form && config_modal) {
 	socket.on('settingsSaveError', handle_settings_save_error);
 }
 
-lidarr_sidebar.addEventListener('show.bs.offcanvas', function (event) {
-	socket.emit('side_bar_opened');
-	socket.emit('personal_sources_poll');
-});
+// Discovery sidebar only exists on main page
+if (lidarr_sidebar) {
+	lidarr_sidebar.addEventListener('show.bs.offcanvas', function (event) {
+		socket.emit('side_bar_opened');
+		socket.emit('personal_sources_poll');
+	});
+}
 
 socket.on('lidarr_sidebar_update', (response) => {
 	if (response.Status == 'Success') {

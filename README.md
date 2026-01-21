@@ -38,6 +38,7 @@ Sonobarr marries your existing Lidarr library with Last.fm's discovery graph to 
 - 🎧 **Preview & context panels** - launch YouTube or iTunes previews, inspect Last.fm biographies, and read key stats without leaving the grid.
 - ⚡️ **Real-time UX** - Socket.IO keeps discovery progress, toast alerts, and button states in sync across every connected client.
 - 👥 **Role-based access** - authentication, user management, profile controls for personal services, and admin-only settings live in one UI.
+- 🔐 **OIDC Single Sign-On** - enable OpenID Connect for authentication, with optional group-based admin assignment and "OIDC-only" mode.
 - 🛡️ **Hardened configuration** - atomic settings writes, locked-down file permissions, and CSRF-protected forms keep secrets safe.
 - 🔔 **Update & schema self-healing** - footer badges surface new releases and the app backfills missing DB columns before loading users.
 - 🐳 **Docker-first deployment** - official GHCR image, rootless-friendly UID/GID mapping, and automatic migrations on start.
@@ -166,6 +167,22 @@ All variables can be supplied in lowercase (preferred for `.env`) or uppercase (
 > ✅ Docker UID/GID mapping: set `PUID`/`PGID` in `.env`. The entrypoint fixes ownership and then drops privileges to that UID/GID.
 
 > ℹ️ `secret_key` is mandatory. If missing, the app refuses to boot to prevent insecure session cookies. With Docker Compose, make sure the key exists in `.env` and that `.env` is declared via `env_file:` as shown above.
+
+### OIDC SSO Configuration
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `oidc_client_id` | - | Client ID from your OIDC provider. |
+| `oidc_client_secret` | - | Client Secret from your OIDC provider. |
+| `oidc_server_metadata_url` | - | The Discovery or Server Metadata URL of your OIDC provider (e.g., `https://your-provider.com/.well-known/openid-configuration`). |
+| `oidc_admin_group` | - | Users in this OIDC group will automatically be granted admin privileges. Admin status syncs on every login. |
+| `oidc_only` | `false` | If `true`, disables password-based login and redirects all users to the OIDC provider. |
+
+**Important Note for OIDC Configuration:**
+When configuring your OIDC provider, you **must** register a Redirect URI (or Callback URL). This is the URL where the OIDC provider will send the user back to Sonobarr after successful authentication. The format for this URI is:
+`https://[YOUR_SONOBARR_DOMAIN_OR_IP]/oidc/callback`
+
+For security, OIDC providers require `https` for all production URLs. For local development, most providers allow `http://localhost:[port]` as an exception.
 
 ---
 

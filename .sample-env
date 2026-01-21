@@ -33,3 +33,17 @@ sonobarr_superadmin_username=admin
 sonobarr_superadmin_password=change-me
 sonobarr_superadmin_display_name=Super Admin
 sonobarr_superadmin_reset=false
+
+# OIDC SSO Configuration (optional)
+# Configure these to enable OpenID Connect authentication
+OIDC_CLIENT_ID=
+OIDC_CLIENT_SECRET=
+OIDC_SERVER_METADATA_URL=
+
+# OIDC Group-Based Admin Assignment
+# Users in this OIDC group will automatically be granted admin privileges
+# Admin status will be synced on every OIDC login
+OIDC_ADMIN_GROUP=
+
+# Set to "true" to disable local password authentication (OIDC only mode)
+OIDC_ONLY=false

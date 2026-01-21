@@ -12,8 +12,9 @@ class User(UserMixin, db.Model):
     __tablename__ = "users"
 
     id = db.Column(db.Integer, primary_key=True)
+    oidc_id = db.Column(db.String(256), unique=True, nullable=True)
     username = db.Column(db.String(80), unique=True, nullable=False, index=True)
-    password_hash = db.Column(db.String(255), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=True)
     display_name = db.Column(db.String(120), nullable=True)
     avatar_url = db.Column(db.String(512), nullable=True)
     lastfm_username = db.Column(db.String(120), nullable=True)

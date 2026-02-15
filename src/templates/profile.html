@@ -47,6 +47,13 @@
             <hr>
             <p class="fw-semibold">External API Keys (optional)</p>
             <p class="text-muted small">Override global API keys with your own. Leave blank to use the admin's global keys.</p>
+            <!-- TODO: Encrypt stored API keys using the user's password for proper at-rest security.
+                 On password reset, require users to re-enter their keys rather than re-encrypting,
+                 so a server admin cannot extract keys by resetting passwords. -->
+            <div class="alert alert-warning py-2 px-3 small">
+              <strong>Heads up:</strong> Your API keys will be stored on this server in order to use them.
+              If you do not trust the server owner or host, do not enter your keys here.
+            </div>
 
             <div class="mb-3">
               <label for="lastfm_api_key" class="form-label">Last.fm API Key</label>
@@ -71,6 +78,10 @@
               <input type="text" class="form-control" id="openai_api_key" name="openai_api_key"
                      value="{{ current_user.openai_api_key or '' }}" placeholder="sk-... (optional)">
               <div class="form-text">For OpenAI, Azure, or compatible providers. Leave blank to use admin's global key.</div>
+            </div>
+            <div class="alert alert-info py-2 px-3 small">
+              <strong>Note:</strong> If you provide your own LLM API key, make sure to also set the correct Base URL below.
+              Local/private URLs will only work if the app is hosted on the same network.
             </div>
             <div class="mb-3">
               <label for="openai_api_base" class="form-label">LLM API Base URL</label>

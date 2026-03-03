@@ -19,6 +19,17 @@ class User(UserMixin, db.Model):
     avatar_url = db.Column(db.String(512), nullable=True)
     lastfm_username = db.Column(db.String(120), nullable=True)
     listenbrainz_username = db.Column(db.String(120), nullable=True)
+
+    # Per-user API keys (optional - fall back to global if not set)
+    lastfm_api_key = db.Column(db.String(256), nullable=True)
+    lastfm_api_secret = db.Column(db.String(256), nullable=True)
+    youtube_api_key = db.Column(db.String(256), nullable=True)
+    openai_api_key = db.Column(db.String(512), nullable=True)
+    openai_api_base = db.Column(db.String(512), nullable=True)
+    openai_model = db.Column(db.String(128), nullable=True)
+    openai_extra_headers = db.Column(db.Text, nullable=True)
+    openai_max_seed_artists = db.Column(db.Integer, nullable=True)
+
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)

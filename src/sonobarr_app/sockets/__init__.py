@@ -19,7 +19,12 @@ def register_socketio_handlers(socketio: SocketIO, data_handler) -> None:
             user_id = int(identifier) if identifier is not None else None
         except (TypeError, ValueError):
             user_id = None
-        data_handler.connection(sid, user_id, current_user.is_admin)
+        data_handler.connection(
+            sid,
+            user_id,
+            current_user.is_admin,
+            getattr(current_user, "auto_approve_artist_requests", False),
+        )
 
     @socketio.on("disconnect")
     def handle_disconnect():

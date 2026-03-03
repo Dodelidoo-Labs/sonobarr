@@ -50,9 +50,12 @@ LIDARR_MONITOR_NEW_ITEM_TYPES = {
 
 @dataclass
 class SessionState:
+    """Per-socket user state used for discovery and authorization decisions."""
+
     sid: str
     user_id: Optional[int]
     is_admin: bool = False
+    auto_approve_artist_requests: bool = False
     recommended_artists: List[dict] = field(default_factory=list)
     lidarr_items: List[dict] = field(default_factory=list)
     cleaned_lidarr_items: List[str] = field(default_factory=list)
@@ -275,15 +278,29 @@ class DataHandler:
                     setattr(self, attr, coerced_bool)
 
     # Session helpers -------------------------------------------------
-    def ensure_session(self, sid: str, user_id: Optional[int] = None, is_admin: bool = False) -> SessionState:
+    def ensure_session(
+        self,
+        sid: str,
+        user_id: Optional[int] = None,
+        is_admin: bool = False,
+        auto_approve_artist_requests: bool = False,
+    ) -> SessionState:
+        """Return existing socket session or create one with current user flags."""
+
         with self.sessions_lock:
             session = self.sessions.get(sid)
             if session is None:
-                session = SessionState(sid=sid, user_id=user_id, is_admin=is_admin)
+                session = SessionState(
+                    sid=sid,
+                    user_id=user_id,
+                    is_admin=is_admin,
+                    auto_approve_artist_requests=auto_approve_artist_requests,
+                )
                 self.sessions[sid] = session
             elif user_id is not None:
                 session.user_id = user_id
                 session.is_admin = is_admin
+                session.auto_approve_artist_requests = auto_approve_artist_requests
             return session
 
     def get_session_if_exists(self, sid: str) -> Optional[SessionState]:
@@ -317,6 +334,23 @@ class DataHandler:
             return User.query.get(int(user_id))
         except (TypeError, ValueError):
             return None
+
+    def _sync_session_permissions(self, session: SessionState) -> None:
+        """Refresh role flags from the database for current authorization checks."""
+
+        user = self._resolve_user(session.user_id)
+        if user is None:
+            session.is_admin = False
+            session.auto_approve_artist_requests = False
+            return
+        session.is_admin = bool(user.is_admin)
+        session.auto_approve_artist_requests = bool(user.auto_approve_artist_requests)
+
+    def _can_add_without_approval(self, session: SessionState) -> bool:
+        """Return whether the session user can add artists directly to Lidarr."""
+
+        self._sync_session_permissions(session)
+        return bool(session.is_admin or session.auto_approve_artist_requests)
 
     def emit_personal_sources_state(self, sid: str) -> None:
         session = self.get_session_if_exists(sid)
@@ -400,10 +434,29 @@ class DataHandler:
         return deduped
 
     # Socket helpers --------------------------------------------------
-    def connection(self, sid: str, user_id: Optional[int], is_admin: bool = False) -> None:
-        session = self.ensure_session(sid, user_id, is_admin)
+    def connection(
+        self,
+        sid: str,
+        user_id: Optional[int],
+        is_admin: bool = False,
+        auto_approve_artist_requests: bool = False,
+    ) -> None:
+        """Initialize socket session state and emit current user capability flags."""
+
+        session = self.ensure_session(sid, user_id, is_admin, auto_approve_artist_requests)
+        self._sync_session_permissions(session)
         # Send user info to frontend
-        self.socketio.emit("user_info", {"is_admin": session.is_admin}, room=sid)
+        self.socketio.emit(
+            "user_info",
+            {
+                "is_admin": session.is_admin,
+                "auto_approve_artist_requests": session.auto_approve_artist_requests,
+                "can_add_without_approval": bool(
+                    session.is_admin or session.auto_approve_artist_requests
+                ),
+            },
+            room=sid,
+        )
         if session.recommended_artists:
             self.socketio.emit("more_artists_loaded", session.recommended_artists, room=sid)
         if session.lidarr_items:
@@ -1028,10 +1081,43 @@ class DataHandler:
 
     # Lidarr artist creation ------------------------------------------
     def add_artists(self, sid: str, raw_artist_name: str) -> str:
+        """Add an artist to Lidarr when the connected user is authorized to bypass approval."""
+
         session = self.ensure_session(sid)
         artist_name = urllib.parse.unquote(raw_artist_name)
         artist_folder = artist_name.replace("/", " ")
         status = "Failed to Add"
+
+        if not session.user_id:
+            self.socketio.emit(
+                "new_toast_msg",
+                {
+                    "title": "Authentication Error",
+                    "message": "You must be logged in to add artists.",
+                },
+                room=sid,
+            )
+            for item in session.recommended_artists:
+                if item["Name"] == artist_name:
+                    item["Status"] = status
+                    self.socketio.emit("refresh_artist", item, room=sid)
+                    break
+            return status
+        if not self._can_add_without_approval(session):
+            self.socketio.emit(
+                "new_toast_msg",
+                {
+                    "title": "Approval Required",
+                    "message": "You do not have permission to add artists directly.",
+                },
+                room=sid,
+            )
+            for item in session.recommended_artists:
+                if item["Name"] == artist_name:
+                    item["Status"] = status
+                    self.socketio.emit("refresh_artist", item, room=sid)
+                    break
+            return status
 
         try:
             musicbrainzngs.set_useragent(self.app_name, self.app_rev, self.app_url)
@@ -1162,6 +1248,8 @@ class DataHandler:
         return status
 
     def request_artist(self, sid: str, raw_artist_name: str) -> None:
+        """Create a pending request unless the user can auto-approve and add directly."""
+
         session = self.ensure_session(sid)
         if not session.user_id:
             self.socketio.emit(
@@ -1173,7 +1261,11 @@ class DataHandler:
                 room=sid,
             )
             return
-        
+
+        if self._can_add_without_approval(session):
+            self.add_artists(sid, raw_artist_name)
+            return
+
         artist_name = urllib.parse.unquote(raw_artist_name)
 
         try:

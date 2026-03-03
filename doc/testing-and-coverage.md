@@ -31,6 +31,10 @@ This command writes:
 - `coverage.xml` for SonarQube ingestion
 - `.coverage` for local coverage tooling
 
+## CI Build Workflow
+
+The GitHub build workflow runs the coverage command before SonarQube analysis in the same job. This keeps SonarQube metrics aligned with the latest tests without uploading build artifacts.
+
 ## Coverage Target
 
 - The active target is 100% line coverage.

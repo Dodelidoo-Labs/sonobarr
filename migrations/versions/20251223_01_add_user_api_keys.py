@@ -1,7 +1,7 @@
 """add per-user api keys
 
 Revision ID: 20251223_01
-Revises: 20251013_01
+Revises: 20251222_01
 Create Date: 2025-12-23 12:00:00.000000
 
 """
@@ -12,7 +12,7 @@ from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
 revision = '20251223_01'
-down_revision = '20251013_01'
+down_revision = '20251222_01'
 branch_labels = None
 depends_on = None
 
@@ -59,3 +59,4 @@ def downgrade():
         for column_name in columns_to_remove:
             if column_name in existing_columns:
                 batch_op.drop_column(column_name)
+

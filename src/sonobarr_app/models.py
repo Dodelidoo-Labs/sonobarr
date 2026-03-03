@@ -9,6 +9,8 @@ from .extensions import db
 
 
 class User(UserMixin, db.Model):
+    """Application user account with authentication and role flags."""
+
     __tablename__ = "users"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -21,6 +23,7 @@ class User(UserMixin, db.Model):
     listenbrainz_username = db.Column(db.String(120), nullable=True)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    auto_approve_artist_requests = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(
         db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
@@ -39,7 +42,10 @@ class User(UserMixin, db.Model):
         return self.display_name or self.username
 
     def __repr__(self) -> str:  # pragma: no cover - representation helper
-        return f"<User id={self.id} username={self.username!r} admin={self.is_admin}>"
+        return (
+            f"<User id={self.id} username={self.username!r} "
+            f"admin={self.is_admin} auto_approve={self.auto_approve_artist_requests}>"
+        )
 
 
 class ArtistRequest(db.Model):

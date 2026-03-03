@@ -1,8 +1,23 @@
-# Contributing
+# Contributing to Sonobarr
 
-1. Clone the repository.
-2. Checkout the `develop` branch: `git checkout develop`.
-3. **Create** a `docker-compose.override.yml` with the following contents:
+Thank you for contributing to Sonobarr. This guide defines the required workflow for local development, testing, and pull requests.
+
+## Branch and Pull Request Policy
+
+- Base all work on the `develop` branch.
+- Open pull requests against `develop`.
+- Keep each pull request focused on one feature or one fix.
+- For substantial non-bugfix work, open an issue first to align on scope.
+
+## Local Development Setup
+
+1. Clone the repository and switch to `develop`:
+   ```bash
+   git clone https://github.com/Dodelidoo-Labs/sonobarr.git
+   cd sonobarr
+   git checkout develop
+   ```
+2. Create `docker-compose.override.yml` with a local source mount and your reverse proxy network:
    ```yaml
    services:
      sonobarr:
@@ -15,27 +30,60 @@
          - ./config:/sonobarr/config
          - /etc/localtime:/etc/localtime:ro
          - ./src:/sonobarr/src
-       #ports:
-       #  - "5000:5000"
+       # ports:
+       #   - "5000:5000"
        networks:
          npm_proxy:
-           ipv4_address: 192.168.97.23 #change as you need
+           ipv4_address: 192.168.97.23 # update for your environment
 
    networks:
      npm_proxy:
        external: true
    ```
-4. Build the image with `sudo docker compose up -d` - later this will re-use the local image.
-5. Make code changes in `src/` or other required files.
-6. Test the changes by restarting the docker image `sudo docker compose down && sudo docker compose up -d` and clearing cache in browser.
-7. Once ready to commit, make sure the build still works as well `sudo docker compose down -v --remove-orphans && sudo docker system prune -a --volumes -f && sudo docker compose up -d`.
+3. Build and start the local stack:
+   ```bash
+   sudo docker compose up -d
+   ```
+4. Implement your changes in `src/`, `migrations/`, and related project files.
 
-### Important
-- We only accept PR's, thus, open a Pull Request on the origin with your code changes against `develop` branch. 
-- A maintainer will always review both code and functionality (User Testing), discuss/approve and finally merge the changes.
-- All changes will be adequately credited in changelog. It is up to you to leave `by xxx` comments in the code. 
-- **Please only commit one feature per PR**.
-- If making substantial changes other than bug fixes please first open a Issue to discuss it.
+## Validation Requirements
 
-**Always test your changes with at least two accounts - admin and a common user - in the app, in at least two distinct browser builds (such as safari and chrome, for example).**
-**Remember that if you made changes affecting config (that is, database or configuration) you have to delete the `./config` folder before rebuilding or restarting the app.**
+Before opening a pull request, verify the change in a running container:
+
+1. Restart and validate normal startup:
+   ```bash
+   sudo docker compose down && sudo docker compose up -d
+   ```
+2. Confirm behavior in the UI and clear browser cache if needed.
+3. Run final clean start validation:
+   ```bash
+   sudo docker compose down -v --remove-orphans
+   sudo docker system prune -a --volumes -f
+   sudo docker compose up -d
+   ```
+
+### Manual Test Coverage
+
+- Test as both an admin and a regular user account.
+- Test in at least two different browsers, for example Safari and Chrome.
+- Validate both developer expectations and end-user behavior.
+- Preserve backward compatibility and verify upgrade and downgrade paths for schema changes.
+
+If your change affects configuration or database state, remove `./config` before rebuilding so migrations and initialization paths are tested from a clean state.
+
+## Pull Request Quality Bar
+
+- Include a clear summary of what changed and why.
+- Describe how you tested it, including user roles and browsers used.
+- Note any migration impact, compatibility concerns, or operational risks.
+- Expect maintainer review of both code quality and runtime behavior before merge.
+
+## Attribution and Changelog
+
+Maintainers curate release notes and changelog entries. If you want explicit credit text, include your preferred attribution in the pull request description.
+
+## AI-Assisted Contributions
+
+AI-assisted contributions are allowed. You are responsible for the submitted code quality and correctness, including security and maintainability.
+
+Low-quality, unreviewed, or non-functional generated code will be rejected. Repeated low-quality submissions after maintainer feedback can result in loss of contribution privileges.

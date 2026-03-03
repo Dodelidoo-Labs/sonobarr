@@ -38,10 +38,6 @@ def _resolve_request_api_key():
     if header_key is not None:
         return _normalize_api_key(header_key)
 
-    header_key_alt = request.headers.get("X-Api-Key")
-    if header_key_alt is not None:
-        return _normalize_api_key(header_key_alt)
-
     query_key = request.args.get("api_key") or request.args.get("key")
     return _normalize_api_key(query_key)
 

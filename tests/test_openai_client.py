@@ -116,3 +116,71 @@ def test_generate_seed_artists_raises_for_missing_json_array(monkeypatch):
 
     with pytest.raises(RuntimeError, match="did not include a JSON array"):
         recommender.generate_seed_artists("Anything")
+
+
+def test_client_initialization_allows_keyless_base_url(monkeypatch):
+    """Client should inject a placeholder API key when only a base URL is configured."""
+
+    monkeypatch.setattr(openai_client, "OpenAI", _FakeOpenAI)
+    recommender = OpenAIRecommender(api_key=None, base_url="https://llm.internal/v1")
+    assert recommender.client.kwargs["api_key"] == "not-provided"
+    assert recommender.client.kwargs["base_url"] == "https://llm.internal/v1"
+
+
+def test_parser_helpers_cover_fenced_and_decoder_edge_paths(monkeypatch):
+    """Parser helpers should tolerate malformed fenced blocks and recover from decode errors."""
+
+    monkeypatch.setattr(openai_client, "OpenAI", _FakeOpenAI)
+    recommender = OpenAIRecommender(api_key="secret")
+
+    fenced_blocks = list(recommender._iter_fenced_code_blocks("```json\r\n[\"A\"]\n```"))
+    assert fenced_blocks and fenced_blocks[0][0] == "json"
+
+    assert list(recommender._iter_fenced_code_blocks("```json\n[\"A\"]")) == []
+    assert recommender._extract_from_fenced_blocks("```python\n[\"A\"]\n```") is None
+    assert recommender._extract_array_fragment("") is None
+
+    decoder_error_result = recommender._find_first_json_array("prefix [not-json suffix")
+    assert decoder_error_result is None
+
+    raw_decode = openai_client.json.JSONDecoder.raw_decode
+
+    def _fake_raw_decode(self, text):
+        if text.startswith("["):
+            return {"not": "list"}, 1
+        return raw_decode(self, text)
+
+    monkeypatch.setattr(openai_client.json.JSONDecoder, "raw_decode", _fake_raw_decode)
+    assert recommender._find_first_json_array("x[1]") is None
+
+
+def test_payload_and_normalization_error_paths(monkeypatch):
+    """Payload parsing helpers should reject invalid formats and skip bad entries."""
+
+    monkeypatch.setattr(openai_client, "OpenAI", _FakeOpenAI)
+    recommender = OpenAIRecommender(api_key="secret", max_seed_artists=3)
+
+    with pytest.raises(RuntimeError, match="Unexpected response format"):
+        recommender._extract_response_content(object())
+
+    with pytest.raises(RuntimeError, match="not valid JSON"):
+        recommender._load_json_payload("[not json]")
+
+    with pytest.raises(RuntimeError, match="not a list of artists"):
+        recommender._coerce_artist_entries({"artists": {"name": "bad"}})
+
+    assert recommender._coerce_artist_entries({"seeds": ["A"]}) == ["A"]
+
+    assert recommender._normalize_artist_entry({"name": 123}) is None
+
+    deduped = recommender._dedupe_and_limit([None, {"name": 123}, "Valid Artist"])
+    assert deduped == ["Valid Artist"]
+
+
+def test_generate_seed_artists_returns_empty_when_response_body_is_blank(monkeypatch):
+    """Generation should return an empty list when the provider returns blank content."""
+
+    monkeypatch.setattr(openai_client, "OpenAI", _FakeOpenAI)
+    recommender = OpenAIRecommender(api_key="secret")
+    recommender.client.chat.completions = _FakeCompletions([_response("   ")])
+    assert recommender.generate_seed_artists("ambient") == []

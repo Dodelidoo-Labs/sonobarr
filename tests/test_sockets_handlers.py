@@ -165,3 +165,31 @@ def test_socket_admin_restrictions_emit_unauthorized(monkeypatch):
     unauthorized = [event for event in fake_socketio.emitted if event[0] == "new_toast_msg"]
     assert len(unauthorized) == 2
     assert "Only administrators" in unauthorized[0][1]["message"]
+
+
+def test_socket_handlers_accept_non_dict_payloads_and_invalid_user_ids(monkeypatch):
+    """Socket handlers should coerce payloads and tolerate non-numeric user identifiers."""
+
+    fake_socketio = _FakeSocketIO()
+    fake_data_handler = _FakeDataHandler()
+    register_socketio_handlers(fake_socketio, fake_data_handler)
+
+    monkeypatch.setattr(sockets_module, "request", SimpleNamespace(sid="sid-edge"))
+    monkeypatch.setattr(
+        sockets_module,
+        "current_user",
+        SimpleNamespace(
+            is_authenticated=True,
+            is_admin=True,
+            auto_approve_artist_requests=False,
+            get_id=lambda: "not-a-number",
+        ),
+    )
+
+    fake_socketio.handlers["connect"]()
+    fake_socketio.handlers["ai_prompt_req"]("discover shoegaze")
+    fake_socketio.handlers["user_recs_req"]("listenbrainz")
+
+    assert ("connection", ("sid-edge", None, True, False)) in fake_data_handler.calls
+    assert ("ai_prompt", ("sid-edge", "discover shoegaze")) in fake_socketio.tasks
+    assert ("personal_recommendations", ("sid-edge", "listenbrainz")) in fake_socketio.tasks

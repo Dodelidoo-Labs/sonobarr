@@ -242,10 +242,7 @@ def _calculate_update_status(
     
     update_available = latest_version != current_version
     status_color = "danger" if update_available else "success"
-    
-    if has_error and not latest_version:
-        status_color = "muted"
-    
+
     return update_available, status_color
 
 

@@ -1,6 +1,6 @@
 # Automated Testing and Coverage
 
-This project now includes an automated pytest suite covering core services, web flows, and socket handlers.
+This project includes an automated pytest suite covering core services, web flows, socket handlers, and edge-case helper branches.
 
 ## Prerequisites
 
@@ -30,6 +30,11 @@ This command writes:
 
 - `coverage.xml` for SonarQube ingestion
 - `.coverage` for local coverage tooling
+
+## Coverage Target
+
+- The active target is 100% line coverage for `src/sonobarr_app`.
+- Keep branch-focused regression tests when adding new helpers or error handling paths so the target remains stable.
 
 ## Notes for SonarQube
 

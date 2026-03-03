@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 from flask import get_flashed_messages
+from sqlalchemy.exc import OperationalError
 
 from sonobarr_app.extensions import db
 from sonobarr_app.models import ArtistRequest, User
 from sonobarr_app.web import api
+import sonobarr_app.web.auth as auth_module
 from sonobarr_app.web.admin import _is_last_admin_demotion
 from sonobarr_app.web.auth import _authenticate
-from sonobarr_app.web.main import _update_user_profile
+from sonobarr_app.web.main import _refresh_personal_sources, _update_user_profile
 from sonobarr_app.web.oidc_auth import _check_oidc_admin_group, _resolve_oidc_username, _sync_oidc_admin_status
 
 
@@ -209,3 +212,119 @@ def test_oidc_helper_functions(app):
             _sync_oidc_admin_status(oidc_user, True)
             assert oidc_user.is_admin is True
             assert "granted admin privileges" in " ".join(get_flashed_messages(with_categories=False)).lower()
+
+
+def test_profile_helper_password_branches_and_refresh_guard(app):
+    """Profile helpers should support no-password updates and reject invalid current passwords."""
+
+    with app.app_context():
+        user = _create_user("profile-helper")
+
+        errors, changed = _update_user_profile({"display_name": "Helper"}, user)
+        assert errors == []
+        assert changed is False
+
+        errors, changed = _update_user_profile(
+            {
+                "new_password": "new-password-1",
+                "confirm_password": "new-password-1",
+                "current_password": "wrong-password",
+            },
+            user,
+        )
+        assert errors == ["Current password is incorrect."]
+        assert changed is False
+
+        _refresh_personal_sources(SimpleNamespace(id=None))
+
+
+def test_auth_db_error_and_login_submit_paths(app, client, monkeypatch):
+    """Authentication should flash schema errors and login POST should follow OIDC and success branches."""
+
+    class _BrokenUserQuery:
+        def filter_by(self, **kwargs):
+            raise OperationalError("select", {}, Exception("schema missing"))
+
+    monkeypatch.setattr(auth_module, "User", SimpleNamespace(query=_BrokenUserQuery()))
+
+    with app.test_request_context("/login", method="POST"):
+        assert _authenticate("alice", "password123") is None
+        flashed = " ".join(get_flashed_messages(with_categories=False))
+        assert "Database upgrade in progress" in flashed
+
+    monkeypatch.setattr(auth_module, "User", User)
+
+    with app.app_context():
+        _create_user("normal-login")
+
+    app.config["OIDC_ONLY"] = True
+    oidc_only_response = client.post(
+        "/login",
+        data={"username": "normal-login", "password": "password123"},
+        follow_redirects=False,
+    )
+    assert oidc_only_response.status_code == 302
+
+    app.config["OIDC_ONLY"] = False
+    success_response = client.post(
+        "/login",
+        data={"username": "normal-login", "password": "password123"},
+        follow_redirects=False,
+    )
+    assert success_response.status_code == 302
+
+
+def test_api_helpers_and_error_responses(app, client, monkeypatch):
+    """API helpers should resolve fallback keys and map handler exceptions to 500 responses."""
+
+    assert api._normalize_api_key(None) is None
+
+    app.config["API_KEY"] = ""
+    app.extensions["data_handler"].api_key = "fallback-key"
+    with app.test_request_context("/api/status", headers={"X-Api-Key": "fallback-key"}):
+        assert api._configured_api_key() == "fallback-key"
+        assert api._resolve_request_api_key() == "fallback-key"
+
+    data_handler = app.extensions.pop("data_handler")
+    with app.test_request_context("/api/status"):
+        assert api._configured_api_key() is None
+    app.extensions["data_handler"] = data_handler
+
+    app.config["API_KEY"] = "k"
+    docs_response = client.get("/api/")
+    assert docs_response.status_code == 302
+
+    class _BrokenQuery:
+        def count(self):
+            raise RuntimeError("boom")
+
+        def filter_by(self, **kwargs):
+            return self
+
+        def filter(self, *args, **kwargs):
+            return self
+
+        def order_by(self, *args, **kwargs):
+            return self
+
+        def limit(self, *args, **kwargs):
+            return self
+
+        def all(self):
+            raise RuntimeError("boom")
+
+    broken_query = _BrokenQuery()
+    monkeypatch.setattr(api, "User", SimpleNamespace(query=broken_query))
+    monkeypatch.setattr(api, "ArtistRequest", SimpleNamespace(query=broken_query))
+
+    status_error = client.get("/api/status", headers={"X-API-Key": "k"})
+    assert status_error.status_code == 500
+    assert status_error.json["error"] == "Internal server error"
+
+    requests_error = client.get("/api/artist-requests?limit=bad", headers={"X-API-Key": "k"})
+    assert requests_error.status_code == 500
+    assert requests_error.json["error"] == "Internal server error"
+
+    stats_error = client.get("/api/stats", headers={"X-API-Key": "k"})
+    assert stats_error.status_code == 500
+    assert stats_error.json["error"] == "Internal server error"

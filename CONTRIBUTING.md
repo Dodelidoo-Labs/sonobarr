@@ -77,16 +77,16 @@ Run automated tests for any change that touches Python code (`src/`), request ha
 
 1. Install dependencies in the required environment:
    ```bash
-   /Users/bedas/Developer/Python/global_venv/bin/pip install -r requirements.txt
-   /Users/bedas/Developer/Python/global_venv/bin/pip install pytest pytest-cov
+   path/to/python-venv/bin/pip install -r requirements.txt
+   path/to/python-venv/bin/pip install pytest pytest-cov
    ```
 2. Run the test suite:
    ```bash
-   PYTHONPATH=src /Users/bedas/Developer/Python/global_venv/bin/python -m pytest
+   PYTHONPATH=src path/to/python-venv -m pytest
    ```
 3. Generate coverage output for SonarQube:
    ```bash
-   PYTHONPATH=src /Users/bedas/Developer/Python/global_venv/bin/python -m pytest \
+   PYTHONPATH=src path/to/python-venv -m pytest \
      --cov=src/sonobarr_app \
      --cov-report=term-missing \
      --cov-report=xml

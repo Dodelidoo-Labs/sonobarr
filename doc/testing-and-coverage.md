@@ -7,20 +7,20 @@ This project includes an automated pytest suite covering core services, web flow
 Install dependencies in the required environment:
 
 ```bash
-/Users/bedas/Developer/Python/global_venv/bin/pip install -r requirements.txt
-/Users/bedas/Developer/Python/global_venv/bin/pip install pytest pytest-cov
+path/to/python-venv/bin/pip install -r requirements.txt
+path/to/python-venv/bin/pip install pytest pytest-cov
 ```
 
 ## Run Tests
 
 ```bash
-PYTHONPATH=src /Users/bedas/Developer/Python/global_venv/bin/python -m pytest
+PYTHONPATH=src path/to/python-venv -m pytest
 ```
 
 ## Generate Coverage Reports
 
 ```bash
-PYTHONPATH=src /Users/bedas/Developer/Python/global_venv/bin/python -m pytest \
+PYTHONPATH=src path/to/python-venv -m pytest \
   --cov=src/sonobarr_app \
   --cov-report=term-missing \
   --cov-report=xml
@@ -33,7 +33,7 @@ This command writes:
 
 ## Coverage Target
 
-- The active target is 100% line coverage for `src/sonobarr_app`.
+- The active target is 100% line coverage.
 - Keep branch-focused regression tests when adding new helpers or error handling paths so the target remains stable.
 
 ## Notes for SonarQube

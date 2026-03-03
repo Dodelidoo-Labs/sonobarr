@@ -55,7 +55,7 @@ def test_register_user_loader_handles_invalid_ids_and_db_schema_failures(app):
 def test_calculate_update_status_returns_muted_when_latest_missing():
     """Update status helper should report unknown state when no latest release is available."""
 
-    assert app_module._calculate_update_status("v1.0.0", None, True) == (None, "muted")
+    assert app_module._calculate_update_status("v1.0.0", None) == (None, "muted")
 
 
 def test_ensure_user_profile_columns_covers_inspection_and_backfill_failures(app, monkeypatch):

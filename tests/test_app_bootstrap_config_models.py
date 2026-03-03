@@ -48,9 +48,9 @@ def test_config_helpers(monkeypatch):
 def test_update_status_helpers():
     """Version status helper functions should produce deterministic labels and colors."""
 
-    assert _calculate_update_status("unknown", "v1.0.0", False) == (None, "muted")
-    assert _calculate_update_status("v1.0.0", "v1.0.0", False) == (False, "success")
-    assert _calculate_update_status("v1.0.0", "v1.1.0", False) == (True, "danger")
+    assert _calculate_update_status("unknown", "v1.0.0") == (None, "muted")
+    assert _calculate_update_status("v1.0.0", "v1.0.0") == (False, "success")
+    assert _calculate_update_status("v1.0.0", "v1.1.0") == (True, "danger")
 
     assert _get_update_status_label(True, "v1.1.0") == "Update available · v1.1.0"
     assert _get_update_status_label(False, "v1.0.0") == "Up to date"

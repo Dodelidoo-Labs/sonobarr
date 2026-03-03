@@ -213,9 +213,7 @@ def _register_footer_metadata(app: Flask, release_client: ReleaseClient) -> None
         release_info = release_client.fetch_latest()
         latest_version = release_info.get("tag_name")
         
-        update_available, status_color = _calculate_update_status(
-            current_version, latest_version, release_info.get("error")
-        )
+        update_available, status_color = _calculate_update_status(current_version, latest_version)
         status_label = _get_update_status_label(update_available, latest_version)
 
         return {
@@ -231,7 +229,8 @@ def _register_footer_metadata(app: Flask, release_client: ReleaseClient) -> None
 
 
 def _calculate_update_status(
-    current_version: str, latest_version: Optional[str], has_error: bool
+    current_version: str,
+    latest_version: Optional[str],
 ) -> tuple[Optional[bool], str]:
     """Calculate if update is available and determine status color."""
     if not latest_version:

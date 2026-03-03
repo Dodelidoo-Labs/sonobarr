@@ -194,7 +194,24 @@ See [CONTRIBUTING.md](https://github.com/Dodelidoo-Labs/sonobarr/blob/main/CONTR
 
 ### Tests
 
-Currently relying on manual testing. Contributions adding pytest coverage, especially around the data handler and settings flows, are very welcome.
+Automated pytest coverage is available for services, web routes, and socket handlers.
+
+Run tests:
+
+```bash
+PYTHONPATH=src /Users/bedas/Developer/Python/global_venv/bin/python -m pytest
+```
+
+Generate coverage for SonarQube:
+
+```bash
+PYTHONPATH=src /Users/bedas/Developer/Python/global_venv/bin/python -m pytest \
+  --cov=src/sonobarr_app \
+  --cov-report=term-missing \
+  --cov-report=xml
+```
+
+See [doc/testing-and-coverage.md](./doc/testing-and-coverage.md) for the full workflow.
 
 ---
 

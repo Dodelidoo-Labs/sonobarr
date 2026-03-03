@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import secrets
-
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from .extensions import db
 from .models import User
 
+DEFAULT_BOOTSTRAP_SUPERADMIN_PASSWORD = "change-me"
+
 
 def bootstrap_super_admin(logger, data_handler) -> None:
+    """Ensure the configured bootstrap super-admin user exists with the expected credentials."""
     try:
         admin_count = User.query.filter_by(is_admin=True).count()
     except (OperationalError, ProgrammingError) as exc:
@@ -22,10 +23,12 @@ def bootstrap_super_admin(logger, data_handler) -> None:
     username = data_handler.superadmin_username
     password = data_handler.superadmin_password
     display_name = data_handler.superadmin_display_name
-    generated_password = False
     if not password:
-        password = secrets.token_urlsafe(16)
-        generated_password = True
+        password = DEFAULT_BOOTSTRAP_SUPERADMIN_PASSWORD
+        logger.warning(
+            "Super-admin password was empty during bootstrap; using fallback default for username %s.",
+            username,
+        )
 
     existing = User.query.filter_by(username=username).first()
     if existing:
@@ -52,11 +55,4 @@ def bootstrap_super_admin(logger, data_handler) -> None:
         db.session.rollback()
         return
 
-    if generated_password:
-        logger.warning(
-            "Generated super-admin credentials. Username: %s Password: %s",
-            username,
-            password,
-        )
-    else:
-        logger.info("Super-admin %s %s.", username, action)
+    logger.info("Super-admin %s %s.", username, action)

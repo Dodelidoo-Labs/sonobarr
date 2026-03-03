@@ -25,12 +25,15 @@ def admin_required(view):
 
 
 def _create_user_from_form(form):
+    """Create a local user from submitted admin form values."""
+
     username = (form.get("username") or "").strip()
     password = form.get("password") or ""
     confirm_password = (form.get("confirm_password") or "").strip()
     display_name = (form.get("display_name") or "").strip()
     avatar_url = (form.get("avatar_url") or "").strip()
     is_admin = form.get("is_admin") == "on"
+    auto_approve_artist_requests = form.get("auto_approve_artist_requests") == "on"
 
     if not username or not password:
         flash("Username and password are required.", "danger")
@@ -47,6 +50,7 @@ def _create_user_from_form(form):
         display_name=display_name or None,
         avatar_url=avatar_url or None,
         is_admin=is_admin,
+        auto_approve_artist_requests=auto_approve_artist_requests,
     )
     user.set_password(password)
     db.session.add(user)
@@ -81,6 +85,8 @@ def _delete_user_from_form(form):
 
 
 def _edit_user_from_form(form):
+    """Update mutable user profile and access-control fields from admin input."""
+
     try:
         user_id = int(form.get("user_id", "0"))
     except ValueError:
@@ -100,6 +106,7 @@ def _edit_user_from_form(form):
 
     # Update active status
     user.is_active = form.get("is_active") == "on"
+    user.auto_approve_artist_requests = form.get("auto_approve_artist_requests") == "on"
 
     # Update admin status with validation
     new_admin_status = form.get("is_admin") == "on"

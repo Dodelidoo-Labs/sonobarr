@@ -135,6 +135,7 @@ const ai_helper_spinner = document.getElementById('ai-helper-spinner');
 
 var lidarr_items = [];
 var is_admin = false;
+var can_add_without_approval = false;
 var socket = io({
 	withCredentials: true,
 });
@@ -211,6 +212,7 @@ socket.on('connect', function () {
 
 socket.on('user_info', function (data) {
 	is_admin = data.is_admin || false;
+	can_add_without_approval = data.can_add_without_approval || is_admin;
 });
 
 function show_header_spinner() {
@@ -716,7 +718,7 @@ function append_artists(artists) {
 			add_button.dataset.defaultText || add_button.textContent;
 
 		// Set button text and handler based on admin status
-		if (is_admin) {
+		if (can_add_without_approval) {
 			add_button.textContent = add_button.dataset.defaultText;
 			add_button.addEventListener('click', function () {
 				add_to_lidarr(artist.Name, add_button);

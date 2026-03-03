@@ -43,6 +43,10 @@
               <input class="form-check-input" type="checkbox" id="is_admin" name="is_admin">
               <label class="form-check-label" for="is_admin">Grant admin privileges</label>
             </div>
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" id="auto_approve_artist_requests" name="auto_approve_artist_requests">
+              <label class="form-check-label" for="auto_approve_artist_requests">Auto approve artist additions</label>
+            </div>
             <div class="d-grid">
               <button type="submit" class="btn btn-primary">Create user</button>
             </div>
@@ -84,6 +88,9 @@
                     {% else %}
                     <span class="badge bg-secondary">User</span>
                     {% endif %}
+                    {% if user.auto_approve_artist_requests %}
+                    <span class="badge bg-success ms-1">Auto-approve</span>
+                    {% endif %}
                   </td>
                   <td class="text-end">
                     {% if user.id != current_user.id %}
@@ -94,6 +101,7 @@
                             data-user-avatarurl="{{ user.avatar_url or '' }}"
                             data-user-isadmin="{{ 'true' if user.is_admin else 'false' }}"
                             data-user-isactive="{{ 'true' if user.is_active else 'false' }}"
+                            data-user-autoapprove="{{ 'true' if user.auto_approve_artist_requests else 'false' }}"
                             data-user-isoidc="{{ 'true' if user.oidc_id else 'false' }}">
                       Edit
                     </button>
@@ -161,6 +169,11 @@
             <label class="form-check-label" for="edit_is_admin">Admin privileges</label>
           </div>
 
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="edit_auto_approve_artist_requests" name="auto_approve_artist_requests">
+            <label class="form-check-label" for="edit_auto_approve_artist_requests">Auto approve artist additions</label>
+          </div>
+
           <div class="alert alert-warning py-2 px-3 small mb-0" id="oidc_warning" style="display: none;">
             <strong>Note:</strong> This user authenticates via OIDC SSO. Admin status will be re-synced on their next login based on SSO group membership.
           </div>
@@ -185,6 +198,7 @@ document.getElementById('editUserModal').addEventListener('show.bs.modal', funct
   const avatarUrl = button.getAttribute('data-user-avatarurl');
   const isAdmin = button.getAttribute('data-user-isadmin') === 'true';
   const isActive = button.getAttribute('data-user-isactive') === 'true';
+  const autoApprove = button.getAttribute('data-user-autoapprove') === 'true';
   const isOidc = button.getAttribute('data-user-isoidc') === 'true';
 
   document.getElementById('edit_user_id').value = userId;
@@ -193,6 +207,7 @@ document.getElementById('editUserModal').addEventListener('show.bs.modal', funct
   document.getElementById('edit_avatar_url').value = avatarUrl;
   document.getElementById('edit_is_admin').checked = isAdmin;
   document.getElementById('edit_is_active').checked = isActive;
+  document.getElementById('edit_auto_approve_artist_requests').checked = autoApprove;
 
   // Show/hide OIDC warning
   const oidcWarning = document.getElementById('oidc_warning');

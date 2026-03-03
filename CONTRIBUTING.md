@@ -71,6 +71,30 @@ Before opening a pull request, verify the change in a running container:
 
 If your change affects configuration or database state, remove `./config` before rebuilding so migrations and initialization paths are tested from a clean state.
 
+## Automated Tests and Coverage
+
+Run automated tests for any change that touches Python code (`src/`), request handling, or settings logic.
+
+1. Install dependencies in the required environment:
+   ```bash
+   /Users/bedas/Developer/Python/global_venv/bin/pip install -r requirements.txt
+   /Users/bedas/Developer/Python/global_venv/bin/pip install pytest pytest-cov
+   ```
+2. Run the test suite:
+   ```bash
+   PYTHONPATH=src /Users/bedas/Developer/Python/global_venv/bin/python -m pytest
+   ```
+3. Generate coverage output for SonarQube:
+   ```bash
+   PYTHONPATH=src /Users/bedas/Developer/Python/global_venv/bin/python -m pytest \
+     --cov=src/sonobarr_app \
+     --cov-report=term-missing \
+     --cov-report=xml
+   ```
+
+Coverage workflow details, report artifacts, and SonarQube notes are documented in:
+- [doc/testing-and-coverage.md](./doc/testing-and-coverage.md)
+
 ## Pull Request Quality Bar
 
 - Include a clear summary of what changed and why.

@@ -7,6 +7,7 @@ config/
 # Python cache
 __pycache__/
 *.pyc
+.pytest_cache/
 
 # Python tooling artifacts
 .pytest_cache/

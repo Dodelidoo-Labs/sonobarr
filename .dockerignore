@@ -1,23 +1,43 @@
-# Exclude unnecessary files from Docker build context
+# Version control
 .git
 .github
 .gitignore
+
+# OS / editor files
 .DS_Store
-README.md
-LICENSE
-*.md
-docker-compose.yml
-config
-*.log
-__pycache__
+.vscode/
+.idea/
+
+# Python caches
+__pycache__/
 *.pyc
 *.pyo
 *.pyd
-.pytest_cache
-venv
-env
+.pytest_cache/
+
+# Virtual environments / env files
+venv/
+env/
 .env
-.sample-env
-tests
-tmp
-node_modules
+.env.*
+*.env
+
+# Logs and temporary files
+*.log
+tmp/
+
+# Tests and documentation
+tests/
+doc/
+
+# Local config not baked into image
+config/
+
+# Project metadata / CI-only files
+CHANGELOG.md
+CONTRIBUTING.md
+README.md
+LICENSE
+docker-compose.yml
+pytest.ini
+sonar-project.properties

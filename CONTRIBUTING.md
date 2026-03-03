@@ -52,14 +52,14 @@ Before opening a pull request, verify the change in a running container:
 
 1. Restart and validate normal startup:
    ```bash
-   sudo docker compose down && sudo docker compose up -d
+   sudo docker compose down && sudo docker compose up -d --build
    ```
 2. Confirm behavior in the UI and clear browser cache if needed.
 3. Run final clean start validation:
    ```bash
    sudo docker compose down -v --remove-orphans
    sudo docker system prune -a --volumes -f
-   sudo docker compose up -d
+   sudo docker compose up -d --build
    ```
 
 ### Manual Test Coverage
@@ -80,7 +80,7 @@ If your change affects configuration or database state, remove `./config` before
 
 ## Attribution and Changelog
 
-Maintainers curate release notes and changelog entries. If you want explicit credit text, include your preferred attribution in the pull request description.
+Maintainers curate release notes and changelog entries. If you want explicit credit text, include your preferred attribution in the pull request description. Contributors will always be attributed in changelog and release notes.
 
 ## AI-Assisted Contributions
 

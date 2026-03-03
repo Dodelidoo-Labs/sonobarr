@@ -21,7 +21,7 @@
     <button class="btn btn-outline-light btn-sm d-none" id="load-more-btn" type="button">
       Load More
     </button>
-    <div class="spinner-border spinner-border-sm text-light d-none" id="artists-loading-spinner" role="status">
+    <div class="spinner-border spinner-border-sm text-light d-none" id="artists-loading-spinner">
       <span class="visually-hidden">Loading...</span>
     </div>
   </div>
@@ -31,9 +31,9 @@
 {% block main %}
   {% if current_user.is_admin %}
   <!-- Settings Modal -->
-  <div class="modal fade" id="config-modal" tabindex="-1" role="dialog" aria-labelledby="settings-modal"
+  <div class="modal fade" id="config-modal" tabindex="-1" aria-labelledby="settings-modal"
     aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" role="document">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="settings-modal">Configuration</h5>
@@ -238,7 +238,7 @@
         <div class="personal-discovery-controls d-flex flex-column gap-3 mt-3">
           <div class="d-flex flex-column gap-1">
             <button class="btn btn-outline-danger w-100 d-flex align-items-center justify-content-center gap-2" id="personal-lastfm-button" type="button" disabled>
-              <span class="spinner-border spinner-border-sm d-none" id="personal-lastfm-spinner" role="status" aria-hidden="true"></span>
+              <span class="spinner-border spinner-border-sm d-none" id="personal-lastfm-spinner" aria-hidden="true"></span>
               <i class="fa-brands fa-lastfm"></i>
               <span>Last.fm for me</span>
             </button>
@@ -246,7 +246,7 @@
           </div>
           <div class="d-flex flex-column gap-1">
             <button class="btn btn-outline-success w-100 d-flex align-items-center justify-content-center gap-2" id="personal-listenbrainz-button" type="button" disabled>
-              <span class="spinner-border spinner-border-sm d-none" id="personal-listenbrainz-spinner" role="status" aria-hidden="true"></span>
+              <span class="spinner-border spinner-border-sm d-none" id="personal-listenbrainz-spinner" aria-hidden="true"></span>
               <i class="fa fa-headphones"></i>
               <span>ListenBrainz for me</span>
             </button>
@@ -259,7 +259,7 @@
         <p class="sidebar-section-title text-uppercase">Library sync</p>
         <div class="d-grid gap-2">
           <button class="btn btn-primary w-100" id="lidarr-get-artists-button" type="button">
-            <span class="spinner-border spinner-border-sm d-none" id="lidarr-spinner" role="status" aria-hidden="true"></span>
+            <span class="spinner-border spinner-border-sm d-none" id="lidarr-spinner" aria-hidden="true"></span>
             Get Lidarr Artists
           </button>
           <button class="btn btn-success w-100" id="start-stop-button" type="button">Start discovery</button>
@@ -300,7 +300,7 @@
             </div>
             <div class="card-body d-flex flex-column gap-2 p-3">
               <div class="d-flex flex-column gap-1">
-                <h5 class="card-title mb-0 fs-5"></h5>
+                <h5 class="card-title mb-0 fs-5"><span class="visually-hidden">Artist name</span></h5>
                 <p class="card-text similarity artist-similarity text-uppercase small fw-semibold text-primary d-none"></p>
                 <p class="card-text genre text-body-secondary mb-0 small"></p>
               </div>
@@ -345,7 +345,7 @@
           <div class="modal-footer">
             <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
             <button type="submit" id="ai-helper-submit" class="btn btn-primary">
-              <span class="spinner-border spinner-border-sm me-2 d-none" id="ai-helper-spinner" role="status" aria-hidden="true"></span>
+              <span class="spinner-border spinner-border-sm me-2 d-none" id="ai-helper-spinner" aria-hidden="true"></span>
               Ask AI
             </button>
           </div>

@@ -6,3 +6,4 @@ This directory contains developer-facing technical documentation for Sonobarr.
 
 - [User management and approval flow](./user-management.md)
 - [Super-admin bootstrap behavior](./superadmin-bootstrap.md)
+- [Sonar remediation notes](./sonar-remediation.md)

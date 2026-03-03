@@ -2,9 +2,7 @@
 
 > Music discovery for Lidarr power users, blending Last.fm insights, ListenBrainz playlists, and a modern web UI.
 
-[![Release](https://img.shields.io/github/v/release/Dodelidoo-Labs/sonobarr?label=Latest%20release&cacheSeconds=60)](https://github.com/Dodelidoo-Labs/sonobarr/releases)
-[![Container](https://img.shields.io/badge/GHCR-sonobarr-blue?logo=github)](https://github.com/Dodelidoo-Labs/sonobarr/pkgs/container/sonobarr)
-[![License](https://img.shields.io/github/license/Dodelidoo-Labs/sonobarr)](./LICENSE)
+[![Coverage](https://sonar.tukutoi.com/api/project_badges/measure?project=Sonobarr&metric=coverage&token=sqb_8df89a972b566d24a1998db279c846e4b48c27b1)](https://sonar.tukutoi.com/dashboard?id=Sonobarr) [![Security Hotspots](https://sonar.tukutoi.com/api/project_badges/measure?project=Sonobarr&metric=security_hotspots&token=sqb_8df89a972b566d24a1998db279c846e4b48c27b1)](https://sonar.tukutoi.com/dashboard?id=Sonobarr) [![Quality Gate Status](https://sonar.tukutoi.com/api/project_badges/measure?project=Sonobarr&metric=alert_status&token=sqb_8df89a972b566d24a1998db279c846e4b48c27b1)](https://sonar.tukutoi.com/dashboard?id=Sonobarr)
 
 Sonobarr marries your existing Lidarr library with Last.fm's discovery graph to surface artists you'll actually like. It runs as a Flask + Socket.IO application, ships with a polished Bootstrap UI, and includes admin tooling so folks can share a single instance safely.
 
@@ -185,16 +183,6 @@ When configuring your OIDC provider, you **must** register a Redirect URI (or Ca
 `https://[YOUR_SONOBARR_DOMAIN_OR_IP]/oidc/callback`
 
 For security, OIDC providers require `https` for all production URLs. For local development, most providers allow `http://localhost:[port]` as an exception.
-
----
-
-## Local development
-
-See [CONTRIBUTING.md](https://github.com/Dodelidoo-Labs/sonobarr/blob/main/CONTRIBUTING.md)
-
-### Tests
-
-Currently relying on manual testing. Contributions adding pytest coverage, especially around the data handler and settings flows, are very welcome.
 
 ---
 

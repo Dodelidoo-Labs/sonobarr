@@ -7,6 +7,12 @@ config/
 # Python cache
 __pycache__/
 *.pyc
+.pytest_cache/
+
+# Python tooling artifacts
+.pytest_cache/
+.coverage
+coverage.xml
 
 # Docker crap
 *.log
@@ -14,3 +20,8 @@ docker-compose.override.yml
 
 VSCode 
 .vscode/
+
+scan.sh
+fetch-issues.sh
+fetch-hotspots.sh
+.scannerwork/

@@ -145,8 +145,8 @@
 
         <div class="modal-body">
           <div class="mb-3">
-            <label class="form-label fw-bold">Username</label>
-            <p class="form-control-plaintext" id="edit_username_display"></p>
+            <p class="form-label fw-bold mb-1" id="edit_username_label">Username</p>
+            <p class="form-control-plaintext" id="edit_username_display" aria-labelledby="edit_username_label"></p>
           </div>
 
           <div class="mb-3">
@@ -192,14 +192,18 @@
 // Populate the edit modal with user data when opened
 document.getElementById('editUserModal').addEventListener('show.bs.modal', function (event) {
   const button = event.relatedTarget;
-  const userId = button.getAttribute('data-user-id');
-  const username = button.getAttribute('data-user-username');
-  const displayName = button.getAttribute('data-user-displayname');
-  const avatarUrl = button.getAttribute('data-user-avatarurl');
-  const isAdmin = button.getAttribute('data-user-isadmin') === 'true';
-  const isActive = button.getAttribute('data-user-isactive') === 'true';
-  const autoApprove = button.getAttribute('data-user-autoapprove') === 'true';
-  const isOidc = button.getAttribute('data-user-isoidc') === 'true';
+  if (!button) {
+    return;
+  }
+  const { dataset } = button;
+  const userId = dataset.userId || '';
+  const username = dataset.userUsername || '';
+  const displayName = dataset.userDisplayname || '';
+  const avatarUrl = dataset.userAvatarurl || '';
+  const isAdmin = dataset.userIsadmin === 'true';
+  const isActive = dataset.userIsactive === 'true';
+  const autoApprove = dataset.userAutoapprove === 'true';
+  const isOidc = dataset.userIsoidc === 'true';
 
   document.getElementById('edit_user_id').value = userId;
   document.getElementById('edit_username_display').textContent = username;

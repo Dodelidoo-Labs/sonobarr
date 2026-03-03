@@ -4,6 +4,7 @@ from ..extensions import oidc
 from ..models import db, User
 
 oidc_auth_bp = Blueprint('oidc_auth', __name__)
+AUTH_LOGIN_ENDPOINT = "auth.login"
 
 
 def _check_oidc_admin_group(user_info):
@@ -44,6 +45,50 @@ def _check_oidc_admin_group(user_info):
     return is_admin
 
 
+def _redirect_to_auth_login(message: str):
+    """Flash an authentication error and redirect to the standard login view."""
+    flash(message, "error")
+    return redirect(url_for(AUTH_LOGIN_ENDPOINT))
+
+
+def _resolve_oidc_username(user_info):
+    """Resolve a unique username claim from OIDC user info payload."""
+    return user_info.get("email") or user_info.get("preferred_username")
+
+
+def _create_oidc_user(oidc_user_id: str, username: str, user_info, is_admin_via_group: bool) -> User:
+    """Create and persist a new OIDC-backed user account."""
+    user = User(
+        oidc_id=oidc_user_id,
+        username=username,
+        display_name=user_info.get('name', username),
+        is_admin=is_admin_via_group,
+    )
+    db.session.add(user)
+    db.session.commit()
+    if is_admin_via_group:
+        current_app.logger.info(
+            "New OIDC user '%s' created with admin privileges via group membership",
+            username,
+        )
+    return user
+
+
+def _sync_oidc_admin_status(user: User, is_admin_via_group: bool) -> None:
+    """Synchronize admin privileges for an existing OIDC account."""
+    old_admin_status = user.is_admin
+    user.is_admin = is_admin_via_group
+    if old_admin_status == is_admin_via_group:
+        return
+    db.session.commit()
+    status_change = "promoted to admin" if is_admin_via_group else "demoted from admin"
+    current_app.logger.info("OIDC user '%s' %s via group sync", user.username, status_change)
+    if is_admin_via_group:
+        flash("Welcome back! You have been granted admin privileges.", "success")
+    else:
+        flash("Welcome back! Your admin privileges have been removed.", "warning")
+
+
 @oidc_auth_bp.route('/oidc/login')
 def login():
     """
@@ -61,13 +106,11 @@ def callback():
     try:
         token = oidc.sonobarr.authorize_access_token()
     except Exception as e:
-        flash(f"OIDC authorization failed: {e}", "error")
-        return redirect(url_for("auth.login"))
+        return _redirect_to_auth_login(f"OIDC authorization failed: {e}")
 
     user_info = token.get('userinfo')
     if not user_info:
-        flash("Failed to get user info from OIDC provider.", "error")
-        return redirect(url_for("auth.login"))
+        return _redirect_to_auth_login("Failed to get user info from OIDC provider.")
 
     # Use 'sub' as the unique, persistent identifier for the user
     oidc_user_id = user_info['sub']
@@ -78,50 +121,24 @@ def callback():
     user = User.query.filter_by(oidc_id=oidc_user_id).first()
 
     if not user:
-        # If user does not exist, create a new one.
-        # Use a preferred claim for the username, like 'email' or 'preferred_username'
-        username = user_info.get('email') or user_info.get('preferred_username')
+        username = _resolve_oidc_username(user_info)
         if not username:
-            flash("OIDC token must provide 'email' or 'preferred_username' claim.", "error")
-            return redirect(url_for("auth.login"))
+            return _redirect_to_auth_login(
+                "OIDC token must provide 'email' or 'preferred_username' claim."
+            )
 
-        # Check if username already exists from a local account
         if User.query.filter_by(username=username).first():
-            flash(f"User '{username}' already exists. Please login with your password and link your OIDC account in your profile.", "error")
-            # Note: This guide does not include account linking, which would be a future enhancement.
-            return redirect(url_for("auth.login"))
-
-        user = User(
-            oidc_id=oidc_user_id,
+            return _redirect_to_auth_login(
+                f"User '{username}' already exists. Please login with your password and link your OIDC account in your profile."
+            )
+        user = _create_oidc_user(
+            oidc_user_id=oidc_user_id,
             username=username,
-            display_name=user_info.get('name', username),
-            is_admin=is_admin_via_group  # Set admin status based on groups
-            # Password can be left null for OIDC-only users
+            user_info=user_info,
+            is_admin_via_group=is_admin_via_group,
         )
-        db.session.add(user)
-        db.session.commit()
-
-        if is_admin_via_group:
-            current_app.logger.info(
-                f"New OIDC user '{username}' created with admin privileges via group membership"
-            )
     else:
-        # Existing OIDC user: sync admin status on every login
-        # This ensures group changes in the OIDC provider are reflected
-        old_admin_status = user.is_admin
-        user.is_admin = is_admin_via_group
-
-        if old_admin_status != is_admin_via_group:
-            db.session.commit()
-            status_change = "promoted to admin" if is_admin_via_group else "demoted from admin"
-            current_app.logger.info(
-                f"OIDC user '{user.username}' {status_change} via group sync"
-            )
-
-            if is_admin_via_group:
-                flash("Welcome back! You have been granted admin privileges.", "success")
-            else:
-                flash("Welcome back! Your admin privileges have been removed.", "warning")
+        _sync_oidc_admin_status(user, is_admin_via_group)
 
     login_user(user)
     return redirect(url_for('main.home'))

@@ -28,6 +28,54 @@ class LastFmUserService:
     def _client(self) -> pylast.LastFMNetwork:
         return pylast.LastFMNetwork(api_key=self.api_key, api_secret=self.api_secret)
 
+    def _safe_get_similar(self, network: pylast.LastFMNetwork, artist_name: str):
+        """Return similar artists for a base artist without raising transport errors."""
+        try:
+            return network.get_artist(artist_name).get_similar()
+        except Exception:
+            return []
+
+    @staticmethod
+    def _parse_similarity_candidate(rel) -> tuple[str, Optional[float]]:
+        """Extract candidate artist name and optional similarity score from a relation object."""
+        try:
+            cand = getattr(rel.item, "name", "")
+            match_val = getattr(rel, "match", None)
+            match_score = float(match_val) if match_val is not None else None
+            return cand, match_score
+        except Exception:
+            return "", None
+
+    def _collect_recommendations(
+        self,
+        network: pylast.LastFMNetwork,
+        top_entries,
+        top_set: set[str],
+        limit: int,
+    ) -> List[LastFmUserArtist]:
+        """Aggregate unique similar artists from top artists until the requested limit is reached."""
+        results: List[LastFmUserArtist] = []
+        seen: set[str] = set()
+        for entry in top_entries:
+            base_name = getattr(entry.item, "name", "")
+            if not base_name:
+                continue
+            for rel in self._safe_get_similar(network, base_name):
+                cand, match_score = self._parse_similarity_candidate(rel)
+                if not cand or cand in top_set or cand in seen:
+                    continue
+                seen.add(cand)
+                results.append(
+                    LastFmUserArtist(
+                        name=cand,
+                        playcount=0,
+                        match_score=match_score,
+                    )
+                )
+                if len(results) >= limit:
+                    return results
+        return results
+
     def get_top_artists(self, username: str, limit: int = 50) -> List[LastFmUserArtist]:
         if not username:
             return []
@@ -56,35 +104,9 @@ class LastFmUserService:
         try:
             network = self._client()
             user = network.get_user(username)
-            # Approximate by similar-to-top aggregation
             top_entries = user.get_top_artists(limit=min(50, max(limit, 20)))
             top_names = [getattr(entry.item, "name", "") for entry in top_entries]
             top_set = {n for n in top_names if n}
-
-            results: List[LastFmUserArtist] = []
-            seen: set[str] = set()
-            for entry in top_entries:
-                artist_obj = entry.item
-                base_name = getattr(artist_obj, "name", "")
-                if not base_name:
-                    continue
-                try:
-                    similar = network.get_artist(base_name).get_similar()
-                except Exception:
-                    continue
-                for rel in similar:
-                    try:
-                        cand = getattr(rel.item, "name", "")
-                        match_val = getattr(rel, "match", None)
-                        match_score = float(match_val) if match_val is not None else None
-                    except Exception:
-                        cand, match_score = "", None
-                    if not cand or cand in top_set or cand in seen:
-                        continue
-                    seen.add(cand)
-                    results.append(LastFmUserArtist(name=cand, playcount=0, match_score=match_score))
-                    if len(results) >= limit:
-                        return results
-            return results
+            return self._collect_recommendations(network, top_entries, top_set, limit)
         except Exception:
             return []

@@ -157,16 +157,18 @@ All variables can be supplied in lowercase (preferred for `.env`) or uppercase (
 | `similar_artist_batch_size` | `10` | Number of cards sent per batch while streaming results. |
 | `auto_start` | `false` | Automatically start a discovery session on load. |
 | `auto_start_delay` | `60` | Delay (seconds) before auto-start kicks in. |
-| `sonobarr_superadmin_username` | `admin` | Username of the bootstrap admin account. |
-| `sonobarr_superadmin_password` | `change-me` | Password for the bootstrap admin. Set to a secure value before first launch. |
+| `sonobarr_superadmin_username` | `admin` | Username of the bootstrap admin account. If unset or blank, Sonobarr uses `admin`. |
+| `sonobarr_superadmin_password` | `change-me` | Password for the bootstrap admin. If unset or blank, Sonobarr uses `change-me`. |
 | `sonobarr_superadmin_display_name` | `Super Admin` | Friendly display name shown in the UI. |
-| `sonobarr_superadmin_reset` | `false` | Set to `true` **once** to reapply the bootstrap credentials on next start. |
+| `sonobarr_superadmin_reset` | `false` | Set to `true` and restart Sonobarr to reapply bootstrap credentials for the configured username (default `admin`). Set it back to `false` after that restart. |
 | `release_version` | `unknown` | Populated automatically inside the Docker image; shown in the footer. No need to set manually. |
 | `sonobarr_config_dir` | `/sonobarr/config` | Override where Sonobarr writes `app.db`, `settings_config.json`, and migrations. |
 
 > ✅ Docker UID/GID mapping: set `PUID`/`PGID` in `.env`. The entrypoint fixes ownership and then drops privileges to that UID/GID.
 
 > ℹ️ `secret_key` is mandatory. If missing, the app refuses to boot to prevent insecure session cookies. With Docker Compose, make sure the key exists in `.env` and that `.env` is declared via `env_file:` as shown above.
+
+> ℹ️ Super-admin bootstrap applies only to the configured bootstrap username. With `sonobarr_superadmin_reset=true`, Sonobarr updates that user if it exists or creates it if it does not; it does not modify other admin accounts.
 
 ### OIDC SSO Configuration
 

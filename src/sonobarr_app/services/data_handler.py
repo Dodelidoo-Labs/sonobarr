@@ -1906,6 +1906,7 @@ class DataHandler:
         return mbid
 
     def load_environ_or_config_settings(self) -> None:
+        """Load settings from environment and config file with deterministic defaults."""
         default_settings = {
             "lidarr_address": "",
             "lidarr_api_key": "",
@@ -1936,7 +1937,7 @@ class DataHandler:
             "openai_max_seed_artists": DEFAULT_MAX_SEED_ARTISTS,
             "api_key": "",
             "sonobarr_superadmin_username": "admin",
-            "sonobarr_superadmin_password": "",
+            "sonobarr_superadmin_password": "change-me",
             "sonobarr_superadmin_display_name": "Super Admin",
             "sonobarr_superadmin_reset": "false",
         }

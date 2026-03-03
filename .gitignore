@@ -14,3 +14,8 @@ docker-compose.override.yml
 
 VSCode 
 .vscode/
+
+scan.sh
+fetch-issues.sh
+fetch-hotspots.sh
+.scannerwork/

@@ -46,6 +46,7 @@ LIDARR_MONITOR_NEW_ITEM_TYPES = {
     "none",
     "new",
 }
+FAILED_TO_ADD_STATUS = "Failed to Add"
 
 
 @dataclass
@@ -410,10 +411,14 @@ class DataHandler:
     def _emit_personal_error(self, sid: str, source: str, message: str, *, title: Optional[str] = None) -> None:
         payload = {"source": source, "message": message}
         self.socketio.emit("user_recs_error", payload, room=sid)
+        self._emit_toast(sid, title or "Personal discovery", message)
+
+    def _emit_toast(self, sid: str, title: str, message: str) -> None:
+        """Emit a unified toast payload to a socket room."""
         self.socketio.emit(
             "new_toast_msg",
             {
-                "title": title or "Personal discovery",
+                "title": title,
                 "message": message,
             },
             room=sid,
@@ -432,6 +437,43 @@ class DataHandler:
             seen.add(normalized)
             deduped.append(cleaned)
         return deduped
+
+    def _filter_existing_seed_artists(
+        self,
+        seeds: Sequence[str],
+        cleaned_library_names: set[str],
+    ) -> Tuple[List[str], List[str]]:
+        """Split incoming seeds into new candidates and already-known library artists."""
+        filtered_seeds: List[str] = []
+        skipped_existing: List[str] = []
+        for seed in seeds:
+            normalized_seed = unidecode(seed).lower()
+            if normalized_seed in cleaned_library_names:
+                skipped_existing.append(seed)
+                continue
+            filtered_seeds.append(seed)
+        return filtered_seeds, skipped_existing
+
+    @staticmethod
+    def _format_skipped_seed_message(skipped_existing: Sequence[str], label: str) -> str:
+        """Build a toast message for recommendations that are already in Lidarr."""
+        if len(skipped_existing) > 1:
+            return f"{len(skipped_existing)} {label} recommendation(s) are already in your Lidarr library."
+        return f"{skipped_existing[0]} is already in your Lidarr library."
+
+    def _refresh_recommended_artist_status(
+        self,
+        session: SessionState,
+        sid: str,
+        artist_name: str,
+        status: str,
+    ) -> None:
+        """Update one recommended artist status and broadcast the card refresh."""
+        for item in session.recommended_artists:
+            if item["Name"] == artist_name:
+                item["Status"] = status
+                self.socketio.emit("refresh_artist", item, room=sid)
+                break
 
     # Socket helpers --------------------------------------------------
     def connection(
@@ -578,26 +620,30 @@ class DataHandler:
         with session.search_lock:
             self.load_similar_artist_batch(session, sid)
 
+    def _emit_ai_prompt_error(self, sid: str, message: str) -> None:
+        """Emit a standardized AI prompt error payload."""
+        self.socketio.emit(
+            "ai_prompt_error",
+            {
+                "message": message,
+            },
+            room=sid,
+        )
+
     def ai_prompt(self, sid: str, prompt: str) -> None:
         session = self.ensure_session(sid)
         prompt_text = (prompt or "").strip()
         if not prompt_text:
-            self.socketio.emit(
-                "ai_prompt_error",
-                {
-                    "message": "Describe what kind of music you're after so the AI assistant can help.",
-                },
-                room=sid,
+            self._emit_ai_prompt_error(
+                sid,
+                "Describe what kind of music you're after so the AI assistant can help.",
             )
             return
 
         if not self.openai_recommender:
-            self.socketio.emit(
-                "ai_prompt_error",
-                {
-                    "message": "AI assistant isn't configured yet. Add an LLM API key or base URL in settings.",
-                },
-                room=sid,
+            self._emit_ai_prompt_error(
+                sid,
+                "AI assistant isn't configured yet. Add an LLM API key or base URL in settings.",
             )
             return
 
@@ -622,50 +668,35 @@ class DataHandler:
         except Exception as exc:  # pragma: no cover - network errors
             elapsed = time.perf_counter() - start_time
             self.logger.error("AI prompt failed after %.2fs: %s", elapsed, exc)
-            message = "We couldn't reach the AI assistant. Please try again in a moment."
-            if "timed out" in str(exc).lower():
-                message = "The AI request timed out. Please try again or adjust the prompt."
-            self.socketio.emit(
-                "ai_prompt_error",
-                {
-                    "message": message,
-                },
-                room=sid,
+            timeout_message = "The AI request timed out. Please try again or adjust the prompt."
+            generic_message = "We couldn't reach the AI assistant. Please try again in a moment."
+            self._emit_ai_prompt_error(
+                sid,
+                timeout_message if "timed out" in str(exc).lower() else generic_message,
             )
             return
 
         if not seeds:
             elapsed = time.perf_counter() - start_time
             self.logger.info("AI prompt completed in %.2fs but returned no artists", elapsed)
-            self.socketio.emit(
-                "ai_prompt_error",
-                {
-                    "message": "The AI couldn't suggest any artists from that request. Try adding genre or artist hints.",
-                },
-                room=sid,
+            self._emit_ai_prompt_error(
+                sid,
+                "The AI couldn't suggest any artists from that request. Try adding genre or artist hints.",
             )
             return
 
-        filtered_seeds: List[str] = []
-        skipped_existing: List[str] = []
-        for seed in seeds:
-            normalized_seed = unidecode(seed).lower()
-            if normalized_seed in cleaned_library_names:
-                skipped_existing.append(seed)
-                continue
-            filtered_seeds.append(seed)
-
+        filtered_seeds, skipped_existing = self._filter_existing_seed_artists(
+            seeds,
+            cleaned_library_names,
+        )
         if not filtered_seeds:
             elapsed = time.perf_counter() - start_time
             self.logger.info(
                 "AI prompt completed in %.2fs but every seed matched an existing Lidarr artist", elapsed
             )
-            self.socketio.emit(
-                "ai_prompt_error",
-                {
-                    "message": "All suggested artists are already in your Lidarr library. Try a different prompt.",
-                },
-                room=sid,
+            self._emit_ai_prompt_error(
+                sid,
+                "All suggested artists are already in your Lidarr library. Try a different prompt.",
             )
             return
 
@@ -675,32 +706,19 @@ class DataHandler:
                 len(skipped_existing),
                 ", ".join(skipped_existing),
             )
-            toast_message = (
-                f"{len(skipped_existing)} AI suggestion(s) are already in your Lidarr library."
-                if len(skipped_existing) > 1
-                else f"{skipped_existing[0]} is already in your Lidarr library."
-            )
-            self.socketio.emit(
-                "new_toast_msg",
-                {
-                    "title": "Skipping known artists",
-                    "message": toast_message,
-                },
-                room=sid,
-            )
-
-        seeds = filtered_seeds
+            toast_message = self._format_skipped_seed_message(skipped_existing, "AI suggestion")
+            self._emit_toast(sid, "Skipping known artists", toast_message)
 
         elapsed = time.perf_counter() - start_time
-        self.logger.info("AI prompt succeeded in %.2fs with %d seed artists", elapsed, len(seeds))
+        self.logger.info("AI prompt succeeded in %.2fs with %d seed artists", elapsed, len(filtered_seeds))
 
         session.prepare_for_search()
         success = self._stream_seed_artists(
             session,
             sid,
-            seeds,
+            filtered_seeds,
             ack_event="ai_prompt_ack",
-            ack_payload={"seeds": seeds},
+            ack_payload={"seeds": filtered_seeds},
             error_event="ai_prompt_error",
             error_message="We couldn't load those artists from our data sources. Try refining your request.",
             missing_title="Missing artist data",
@@ -725,11 +743,9 @@ class DataHandler:
         names = playlist_artists.artists if playlist_artists else []
         return [name for name in names if name]
 
-    def personal_recommendations(self, sid: str, source: str) -> None:
-        session = self.ensure_session(sid)
-        source_key = (source or "").strip().lower() or "lastfm"
-
-        source_definitions = {
+    def _personal_source_definitions(self) -> Dict[str, Dict[str, Any]]:
+        """Return source-specific metadata and loaders for personal recommendations."""
+        return {
             "lastfm": {
                 "label": "Last.fm",
                 "title": "Last.fm discovery",
@@ -758,7 +774,88 @@ class DataHandler:
             },
         }
 
-        config = source_definitions.get(source_key)
+    def _fetch_personal_recommendation_seeds(
+        self,
+        sid: str,
+        source_key: str,
+        config: Dict[str, Any],
+        username: str,
+    ) -> Optional[List[str]]:
+        """Fetch raw personal recommendation seeds for the selected integration source."""
+        source_label = config["label"]
+        try:
+            return config["fetch"](username)
+        except ListenBrainzIntegrationError as exc:  # pragma: no cover - network errors
+            self.logger.error("Failed to load ListenBrainz picks for %s: %s", username, exc)
+        except Exception as exc:  # pragma: no cover - network errors
+            self.logger.error("Failed to load %s recommendations for %s: %s", source_label, username, exc)
+        self._emit_personal_error(
+            sid,
+            source_key,
+            config["error_message"],
+            title=config["title"],
+        )
+        return None
+
+    def _ensure_cleaned_library_names(self, session: SessionState, sid: str) -> set[str]:
+        """Ensure per-session normalized Lidarr names are available for seed filtering."""
+        if not session.cleaned_lidarr_items:
+            cleaned = self._copy_cached_cleaned_names()
+            if not cleaned:
+                try:
+                    self.get_artists_from_lidarr(sid)
+                    cleaned = self._copy_cached_cleaned_names()
+                except Exception:  # pragma: no cover - network errors
+                    cleaned = []
+            session.cleaned_lidarr_items = cleaned
+        return set(session.cleaned_lidarr_items)
+
+    def _emit_sidebar_success(self, sid: str, session: SessionState) -> None:
+        """Broadcast the latest sidebar payload after recommendation processing."""
+        self.socketio.emit(
+            "lidarr_sidebar_update",
+            {
+                "Status": "Success",
+                "Data": session.lidarr_items,
+                "Running": session.running,
+            },
+            room=sid,
+        )
+
+    def _emit_all_personal_recommendations_known(
+        self,
+        session: SessionState,
+        sid: str,
+        source_key: str,
+        username_display: str,
+        skipped_existing: Sequence[str],
+        title: str,
+    ) -> None:
+        """Emit feedback when every personal recommendation already exists in Lidarr."""
+        self.socketio.emit(
+            "user_recs_ack",
+            {
+                "source": source_key,
+                "username": username_display,
+                "seeds": [],
+                "skipped": list(skipped_existing),
+            },
+            room=sid,
+        )
+        self._emit_personal_error(
+            sid,
+            source_key,
+            "All recommended artists are already in your Lidarr library.",
+            title=title,
+        )
+        session.mark_stopped()
+        self._emit_sidebar_success(sid, session)
+
+    def personal_recommendations(self, sid: str, source: str) -> None:
+        session = self.ensure_session(sid)
+        source_key = (source or "").strip().lower() or "lastfm"
+
+        config = self._personal_source_definitions().get(source_key)
         if not config:
             self._emit_personal_error(
                 sid,
@@ -801,25 +898,13 @@ class DataHandler:
         source_label = config["label"]
         username_display = username
 
-        try:
-            seeds = config["fetch"](username)
-        except ListenBrainzIntegrationError as exc:  # pragma: no cover - network errors
-            self.logger.error("Failed to load ListenBrainz picks for %s: %s", username, exc)
-            self._emit_personal_error(
-                sid,
-                source_key,
-                config["error_message"],
-                title=config["title"],
-            )
-            return
-        except Exception as exc:  # pragma: no cover - network errors
-            self.logger.error("Failed to load %s recommendations for %s: %s", source_label, username, exc)
-            self._emit_personal_error(
-                sid,
-                source_key,
-                config["error_message"],
-                title=config["title"],
-            )
+        seeds = self._fetch_personal_recommendation_seeds(
+            sid,
+            source_key,
+            config,
+            username,
+        )
+        if seeds is None:
             return
 
         elapsed = time.perf_counter() - start_time
@@ -841,25 +926,11 @@ class DataHandler:
             )
             return
 
-        if not session.cleaned_lidarr_items:
-            cleaned = self._copy_cached_cleaned_names()
-            if not cleaned:
-                try:
-                    self.get_artists_from_lidarr(sid)
-                    cleaned = self._copy_cached_cleaned_names()
-                except Exception:  # pragma: no cover - network errors
-                    cleaned = []
-            session.cleaned_lidarr_items = cleaned
-        cleaned_library_names = set(session.cleaned_lidarr_items)
-
-        skipped_existing: List[str] = []
-        filtered_seeds: List[str] = []
-        for seed in seeds:
-            normalized_seed = unidecode(seed).lower()
-            if normalized_seed in cleaned_library_names:
-                skipped_existing.append(seed)
-                continue
-            filtered_seeds.append(seed)
+        cleaned_library_names = self._ensure_cleaned_library_names(session, sid)
+        filtered_seeds, skipped_existing = self._filter_existing_seed_artists(
+            seeds,
+            cleaned_library_names,
+        )
 
         if not filtered_seeds:
             self.logger.info(
@@ -867,48 +938,22 @@ class DataHandler:
                 source_label,
                 user.username,
             )
-            self.socketio.emit(
-                "user_recs_ack",
-                {
-                    "source": source_key,
-                    "username": username_display,
-                    "seeds": [],
-                    "skipped": skipped_existing,
-                },
-                room=sid,
-            )
-            self._emit_personal_error(
+            self._emit_all_personal_recommendations_known(
+                session,
                 sid,
                 source_key,
-                "All recommended artists are already in your Lidarr library.",
-                title=config["title"],
-            )
-            session.mark_stopped()
-            self.socketio.emit(
-                "lidarr_sidebar_update",
-                {
-                    "Status": "Success",
-                    "Data": session.lidarr_items,
-                    "Running": session.running,
-                },
-                room=sid,
+                username_display,
+                skipped_existing,
+                config["title"],
             )
             return
 
         if skipped_existing:
-            toast_message = (
-                f"{len(skipped_existing)} {source_label} recommendation(s) are already in your Lidarr library."
-                if len(skipped_existing) > 1
-                else f"{skipped_existing[0]} is already in your Lidarr library."
+            toast_message = self._format_skipped_seed_message(
+                skipped_existing,
+                source_label,
             )
-            self.socketio.emit(
-                "new_toast_msg",
-                {
-                    "title": "Skipping known artists",
-                    "message": toast_message,
-                },
-                room=sid,
-            )
+            self._emit_toast(sid, "Skipping known artists", toast_message)
 
         session.prepare_for_search()
         success = self._stream_seed_artists(
@@ -934,16 +979,7 @@ class DataHandler:
             return
 
         self.emit_personal_sources_state(sid)
-
-        self.socketio.emit(
-            "lidarr_sidebar_update",
-            {
-                "Status": "Success",
-                "Data": session.lidarr_items,
-                "Running": session.running,
-            },
-            room=sid,
-        )
+        self._emit_sidebar_success(sid, session)
 
     def stop(self, sid: str) -> None:
         session = self.ensure_session(sid)
@@ -955,52 +991,62 @@ class DataHandler:
         }
         self.socketio.emit("lidarr_sidebar_update", payload, room=sid)
 
-    def prepare_similar_artist_candidates(self, session: SessionState) -> None:
-        session.similar_artist_candidates = []
-        session.similar_artist_batch_pointer = 0
-        session.initial_batch_sent = False
+    @staticmethod
+    def _parse_similarity_match(raw_match: Any) -> Optional[float]:
+        """Parse Last.fm similarity ratio into a float when available."""
+        try:
+            return float(raw_match) if raw_match is not None else None
+        except (TypeError, ValueError):
+            return None
 
+    @staticmethod
+    def _similar_artist_sort_key(item: Dict[str, Any]) -> Tuple[float, str]:
+        """Sort similar candidates by descending match, then normalized artist name."""
+        match_value = item["match"] if item["match"] is not None else -1.0
+        normalized_name = unidecode(item["artist"].item.name).lower()
+        return (-match_value, normalized_name)
+
+    def _collect_similar_candidates(
+        self,
+        session: SessionState,
+    ) -> List[Dict[str, Any]]:
+        """Collect deduplicated similar-artist candidates for the current session seeds."""
         lfm = pylast.LastFMNetwork(
             api_key=self.last_fm_api_key,
             api_secret=self.last_fm_api_secret,
         )
-
-        seen_candidates = set()
+        candidates: List[Dict[str, Any]] = []
+        seen_candidates: set[str] = set()
         seed_names = {unidecode(name).lower() for name in session.ai_seed_artists}
         for artist_name in session.artists_to_use_in_search:
             try:
-                chosen_artist = lfm.get_artist(artist_name)
-                related_artists = chosen_artist.get_similar()
-                for related_artist in related_artists:
-                    cleaned_artist = unidecode(related_artist.item.name).lower()
-                    if (
-                        cleaned_artist in session.cleaned_lidarr_items
-                        or cleaned_artist in seen_candidates
-                        or cleaned_artist in seed_names
-                    ):
-                        continue
-                    seen_candidates.add(cleaned_artist)
-                    raw_match = getattr(related_artist, "match", None)
-                    try:
-                        match_score = float(raw_match) if raw_match is not None else None
-                    except (TypeError, ValueError):
-                        match_score = None
-                    session.similar_artist_candidates.append(
-                        {
-                            "artist": related_artist,
-                            "match": match_score,
-                        }
-                    )
+                related_artists = lfm.get_artist(artist_name).get_similar()
             except Exception:
                 continue
-            if len(session.similar_artist_candidates) >= 500:
-                break
+            for related_artist in related_artists:
+                cleaned_artist = unidecode(related_artist.item.name).lower()
+                already_known = cleaned_artist in session.cleaned_lidarr_items
+                already_seen = cleaned_artist in seen_candidates
+                seeded_artist = cleaned_artist in seed_names
+                if already_known or already_seen or seeded_artist:
+                    continue
+                seen_candidates.add(cleaned_artist)
+                candidates.append(
+                    {
+                        "artist": related_artist,
+                        "match": self._parse_similarity_match(getattr(related_artist, "match", None)),
+                    }
+                )
+                if len(candidates) >= 500:
+                    return candidates
+        return candidates
 
-        def sort_key(item):
-            match_value = item["match"] if item["match"] is not None else -1.0
-            return (-match_value, unidecode(item["artist"].item.name).lower())
-
-        session.similar_artist_candidates.sort(key=sort_key)
+    def prepare_similar_artist_candidates(self, session: SessionState) -> None:
+        session.similar_artist_candidates = []
+        session.similar_artist_batch_pointer = 0
+        session.initial_batch_sent = False
+        session.similar_artist_candidates = self._collect_similar_candidates(session)
+        session.similar_artist_candidates.sort(key=self._similar_artist_sort_key)
 
     def load_similar_artist_batch(self, session: SessionState, sid: str) -> None:
         if session.stop_event.is_set():
@@ -1080,170 +1126,198 @@ class DataHandler:
                 session.mark_stopped()
 
     # Lidarr artist creation ------------------------------------------
+    def _build_lidarr_add_payload(self, artist_name: str, artist_folder: str, mbid: str) -> Dict[str, Any]:
+        """Build Lidarr artist-creation payload from the current runtime settings."""
+        monitored_flag = bool(self.lidarr_monitored)
+        add_options: Dict[str, Any] = {
+            "searchForMissingAlbums": bool(self.search_for_missing_albums),
+            "monitored": monitored_flag,
+        }
+        if self.lidarr_monitor_option:
+            add_options["monitor"] = self.lidarr_monitor_option
+        if self.lidarr_albums_to_monitor:
+            add_options["albumsToMonitor"] = list(self.lidarr_albums_to_monitor)
+        payload: Dict[str, Any] = {
+            "ArtistName": artist_name,
+            "qualityProfileId": self.quality_profile_id,
+            "metadataProfileId": self.metadata_profile_id,
+            "path": os.path.join(self.root_folder_path, artist_folder, ""),
+            "rootFolderPath": self.root_folder_path,
+            "foreignArtistId": mbid,
+            "monitored": monitored_flag,
+            "addOptions": add_options,
+        }
+        if self.lidarr_monitor_new_items:
+            payload["monitorNewItems"] = self.lidarr_monitor_new_items
+        return payload
+
+    def _submit_lidarr_add_request(
+        self,
+        payload: Dict[str, Any],
+    ) -> Tuple[Optional[requests.Response], int]:
+        """Create an artist in Lidarr and return both response object and status code."""
+        if self.dry_run_adding_to_lidarr:
+            return None, 201
+        lidarr_url = f"{self.lidarr_address}/api/v1/artist"
+        headers = {"X-Api-Key": self.lidarr_api_key}
+        response = requests.post(
+            lidarr_url,
+            headers=headers,
+            json=payload,
+            timeout=self.lidarr_api_timeout,
+        )
+        return response, response.status_code
+
+    def _extract_lidarr_error_message(
+        self,
+        response: Optional[requests.Response],
+    ) -> Tuple[str, Optional[Any], str]:
+        """Extract error body, payload and message from a failed Lidarr add response."""
+        if self.dry_run_adding_to_lidarr:
+            response_body = "Dry-run mode: no request sent."
+            error_payload = None
+        elif response is not None:
+            response_body = response.text.strip()
+            try:
+                error_payload = response.json()
+            except ValueError:
+                error_payload = None
+        else:
+            response_body = "No response object returned."
+            error_payload = None
+
+        if isinstance(error_payload, list) and error_payload:
+            error_message = error_payload[0].get("errorMessage", "No Error Message Returned")
+        elif isinstance(error_payload, dict):
+            error_message = (
+                error_payload.get("errorMessage")
+                or error_payload.get("message")
+                or "No Error Message Returned"
+            )
+        else:
+            error_message = response_body or "Error Unknown"
+        return response_body, error_payload, error_message
+
+    def _resolve_lidarr_add_failure_status(
+        self,
+        artist_name: str,
+        artist_folder: str,
+        response_status: int,
+        response: Optional[requests.Response],
+    ) -> str:
+        """Map Lidarr failure details into the frontend status labels."""
+        response_body, error_payload, error_message = self._extract_lidarr_error_message(response)
+        self.logger.error(
+            "Failed to add artist '%s' to Lidarr (status=%s). Body: %s",
+            artist_name,
+            response_status,
+            response_body,
+        )
+        if error_payload is not None:
+            self.logger.error("Lidarr error payload: %s", error_payload)
+        self.logger.error("Lidarr error message: %s", error_message)
+
+        if "already been added" in error_message or "configured for an existing artist" in error_message:
+            return "Already in Lidarr"
+        if "Invalid Path" in error_message:
+            self.logger.info(
+                "Path '%s' reported invalid by Lidarr.",
+                os.path.join(self.root_folder_path, artist_folder, ""),
+            )
+            return "Invalid Path"
+        return FAILED_TO_ADD_STATUS
+
+    def _record_added_artist(self, session: SessionState, artist_name: str) -> None:
+        """Persist a successfully added artist in both per-session and cached lists."""
+        session.lidarr_items.append({"name": artist_name, "checked": False})
+        normalized = unidecode(artist_name).lower()
+        session.cleaned_lidarr_items.append(normalized)
+        with self.cache_lock:
+            if artist_name not in self.cached_lidarr_names:
+                self.cached_lidarr_names.append(artist_name)
+                self.cached_cleaned_lidarr_names.append(normalized)
+
+    def _perform_artist_addition(
+        self,
+        session: SessionState,
+        sid: str,
+        artist_name: str,
+        artist_folder: str,
+    ) -> str:
+        """Run the Lidarr add flow and return the final status string."""
+        musicbrainzngs.set_useragent(self.app_name, self.app_rev, self.app_url)
+        mbid = self.get_mbid_from_musicbrainz(artist_name)
+        if not mbid:
+            self.logger.warning("No MusicBrainz match found for '%s'; cannot add to Lidarr.", artist_name)
+            self._emit_toast(
+                sid,
+                "Failed to add Artist",
+                f"No Matching Artist for: '{artist_name}' in MusicBrainz.",
+            )
+            return FAILED_TO_ADD_STATUS
+
+        payload = self._build_lidarr_add_payload(artist_name, artist_folder, mbid)
+        response, response_status = self._submit_lidarr_add_request(payload)
+        if response_status == 201:
+            self.logger.info("Artist '%s' added successfully to Lidarr.", artist_name)
+            self._record_added_artist(session, artist_name)
+            return "Added"
+        return self._resolve_lidarr_add_failure_status(
+            artist_name,
+            artist_folder,
+            response_status,
+            response,
+        )
+
+    def _validate_artist_add_permissions(
+        self,
+        session: SessionState,
+        sid: str,
+        artist_name: str,
+        status: str,
+    ) -> bool:
+        """Validate whether the connected user can directly add artists."""
+        if not session.user_id:
+            self._emit_toast(sid, "Authentication Error", "You must be logged in to add artists.")
+            self._refresh_recommended_artist_status(session, sid, artist_name, status)
+            return False
+        if not self._can_add_without_approval(session):
+            self._emit_toast(
+                sid,
+                "Approval Required",
+                "You do not have permission to add artists directly.",
+            )
+            self._refresh_recommended_artist_status(session, sid, artist_name, status)
+            return False
+        return True
+
     def add_artists(self, sid: str, raw_artist_name: str) -> str:
         """Add an artist to Lidarr when the connected user is authorized to bypass approval."""
 
         session = self.ensure_session(sid)
         artist_name = urllib.parse.unquote(raw_artist_name)
         artist_folder = artist_name.replace("/", " ")
-        status = "Failed to Add"
+        status = FAILED_TO_ADD_STATUS
 
-        if not session.user_id:
-            self.socketio.emit(
-                "new_toast_msg",
-                {
-                    "title": "Authentication Error",
-                    "message": "You must be logged in to add artists.",
-                },
-                room=sid,
-            )
-            for item in session.recommended_artists:
-                if item["Name"] == artist_name:
-                    item["Status"] = status
-                    self.socketio.emit("refresh_artist", item, room=sid)
-                    break
-            return status
-        if not self._can_add_without_approval(session):
-            self.socketio.emit(
-                "new_toast_msg",
-                {
-                    "title": "Approval Required",
-                    "message": "You do not have permission to add artists directly.",
-                },
-                room=sid,
-            )
-            for item in session.recommended_artists:
-                if item["Name"] == artist_name:
-                    item["Status"] = status
-                    self.socketio.emit("refresh_artist", item, room=sid)
-                    break
+        if not self._validate_artist_add_permissions(session, sid, artist_name, status):
             return status
 
         try:
-            musicbrainzngs.set_useragent(self.app_name, self.app_rev, self.app_url)
-            mbid = self.get_mbid_from_musicbrainz(artist_name)
-
-            if mbid:
-                lidarr_url = f"{self.lidarr_address}/api/v1/artist"
-                headers = {"X-Api-Key": self.lidarr_api_key}
-                monitored_flag = bool(self.lidarr_monitored)
-                add_options: dict[str, Any] = {
-                    "searchForMissingAlbums": bool(self.search_for_missing_albums),
-                    "monitored": monitored_flag,
-                }
-                if self.lidarr_monitor_option:
-                    add_options["monitor"] = self.lidarr_monitor_option
-                if self.lidarr_albums_to_monitor:
-                    add_options["albumsToMonitor"] = list(self.lidarr_albums_to_monitor)
-                payload = {
-                    "ArtistName": artist_name,
-                    "qualityProfileId": self.quality_profile_id,
-                    "metadataProfileId": self.metadata_profile_id,
-                    "path": os.path.join(self.root_folder_path, artist_folder, ""),
-                    "rootFolderPath": self.root_folder_path,
-                    "foreignArtistId": mbid,
-                    "monitored": monitored_flag,
-                    "addOptions": add_options,
-                }
-                if self.lidarr_monitor_new_items:
-                    payload["monitorNewItems"] = self.lidarr_monitor_new_items
-
-                if self.dry_run_adding_to_lidarr:
-                    response = None
-                    response_status = 201
-                else:
-                    response = requests.post(
-                        lidarr_url,
-                        headers=headers,
-                        json=payload,
-                        timeout=self.lidarr_api_timeout,
-                    )
-                    response_status = response.status_code
-
-                if response_status == 201:
-                    self.logger.info("Artist '%s' added successfully to Lidarr.", artist_name)
-                    status = "Added"
-                    session.lidarr_items.append({"name": artist_name, "checked": False})
-                    session.cleaned_lidarr_items.append(unidecode(artist_name).lower())
-                    with self.cache_lock:
-                        if artist_name not in self.cached_lidarr_names:
-                            self.cached_lidarr_names.append(artist_name)
-                            self.cached_cleaned_lidarr_names.append(unidecode(artist_name).lower())
-                else:
-                    if self.dry_run_adding_to_lidarr:
-                        response_body = "Dry-run mode: no request sent."
-                        error_payload = None
-                    elif response is not None:
-                        response_body = response.text.strip()
-                        try:
-                            error_payload = response.json()
-                        except ValueError:
-                            error_payload = None
-                    else:
-                        response_body = "No response object returned."
-                        error_payload = None
-
-                    self.logger.error(
-                        "Failed to add artist '%s' to Lidarr (status=%s). Body: %s",
-                        artist_name,
-                        response_status,
-                        response_body,
-                    )
-                    if error_payload is not None:
-                        self.logger.error("Lidarr error payload: %s", error_payload)
-
-                    if isinstance(error_payload, list) and error_payload:
-                        error_message = error_payload[0].get("errorMessage", "No Error Message Returned")
-                    elif isinstance(error_payload, dict):
-                        error_message = (
-                            error_payload.get("errorMessage")
-                            or error_payload.get("message")
-                            or "No Error Message Returned"
-                        )
-                    else:
-                        error_message = response_body or "Error Unknown"
-
-                    self.logger.error("Lidarr error message: %s", error_message)
-
-                    if "already been added" in error_message or "configured for an existing artist" in error_message:
-                        status = "Already in Lidarr"
-                    elif "Invalid Path" in error_message:
-                        status = "Invalid Path"
-                        self.logger.info(
-                            "Path '%s' reported invalid by Lidarr.",
-                            os.path.join(self.root_folder_path, artist_folder, ""),
-                        )
-                    else:
-                        status = "Failed to Add"
-            else:
-                self.logger.warning(
-                    "No MusicBrainz match found for '%s'; cannot add to Lidarr.", artist_name
-                )
-                self.socketio.emit(
-                    "new_toast_msg",
-                    {
-                        "title": "Failed to add Artist",
-                        "message": f"No Matching Artist for: '{artist_name}' in MusicBrainz.",
-                    },
-                    room=sid,
-                )
-
+            status = self._perform_artist_addition(
+                session,
+                sid,
+                artist_name,
+                artist_folder,
+            )
         except Exception as exc:  # pragma: no cover - network errors
             self.logger.exception("Unexpected error while adding '%s' to Lidarr", artist_name)
-            self.socketio.emit(
-                "new_toast_msg",
-                {
-                    "title": "Failed to add Artist",
-                    "message": f"Error adding '{artist_name}': {exc}",
-                },
-                room=sid,
+            self._emit_toast(
+                sid,
+                "Failed to add Artist",
+                f"Error adding '{artist_name}': {exc}",
             )
         finally:
-            for item in session.recommended_artists:
-                if item["Name"] == artist_name:
-                    item["Status"] = status
-                    self.socketio.emit("refresh_artist", item, room=sid)
-                    break
+            self._refresh_recommended_artist_status(session, sid, artist_name, status)
 
         return status
 
@@ -1446,101 +1520,176 @@ class DataHandler:
 
         self.socketio.emit("lastfm_preview", preview_info, room=sid)
 
-    def prehear(self, sid: str, raw_artist_name: str) -> None:
-        artist_name = urllib.parse.unquote(raw_artist_name)
+    def _fetch_lastfm_top_tracks(self, artist_name: str) -> List[Any]:
+        """Fetch top Last.fm tracks for an artist, returning an empty list on network errors."""
         lfm = pylast.LastFMNetwork(
             api_key=self.last_fm_api_key,
             api_secret=self.last_fm_api_secret,
         )
-        yt_key = (self.youtube_api_key or "").strip()
-        result: dict[str, str] = {"error": "No sample found"}
-        top_tracks = []
         try:
             artist = lfm.get_artist(artist_name)
-            top_tracks = artist.get_top_tracks(limit=10)
+            return artist.get_top_tracks(limit=10)
         except Exception as exc:  # pragma: no cover - network errors
-            self.logger.error(f"LastFM error: {exc}")
+            self.logger.error("LastFM error: %s", exc)
+            return []
 
-        def attempt_youtube(track_name: str) -> Optional[dict[str, str]]:
-            if not yt_key:
-                return None
-            query = f"{artist_name} {track_name}"
-            yt_url = (
-                "https://www.googleapis.com/youtube/v3/search?part=snippet"
-                f"&q={requests.utils.quote(query)}&key={yt_key}&type=video&maxResults=1"
-            )
-            try:
-                yt_resp = requests.get(yt_url, timeout=10)
-                yt_resp.raise_for_status()
-            except Exception as exc:  # pragma: no cover - network errors
-                self.logger.error(f"YouTube search failed: {exc}")
-                return None
-            yt_items = yt_resp.json().get("items", [])
-            if not yt_items:
-                return None
-            video_id = yt_items[0]["id"]["videoId"]
-            return {
-                "videoId": video_id,
-                "track": track_name,
-                "artist": artist_name,
-                "source": "youtube",
-            }
-
-        def attempt_itunes(track_name: Optional[str]) -> Optional[dict[str, str]]:
-            search_term = f"{artist_name} {track_name}" if track_name else artist_name
-            params = {
-                "term": search_term,
-                "entity": "musicTrack",
-                "limit": 5,
-                "media": "music",
-            }
-            try:
-                resp = requests.get("https://itunes.apple.com/search", params=params, timeout=10)
-                resp.raise_for_status()
-            except Exception as exc:  # pragma: no cover - network errors
-                self.logger.error(f"iTunes lookup failed: {exc}")
-                return None
-            for entry in resp.json().get("results", []):
-                preview_url = entry.get("previewUrl")
-                if not preview_url:
-                    continue
-                return {
-                    "previewUrl": preview_url,
-                    "track": entry.get("trackName") or (track_name or artist_name),
-                    "artist": entry.get("artistName") or artist_name,
-                    "source": "itunes",
-                }
+    def _attempt_youtube_preview(
+        self,
+        artist_name: str,
+        track_name: str,
+        yt_key: str,
+    ) -> Optional[Dict[str, str]]:
+        """Attempt to resolve a YouTube video preview for an artist-track pair."""
+        if not yt_key:
             return None
-
+        query = f"{artist_name} {track_name}"
+        yt_url = (
+            "https://www.googleapis.com/youtube/v3/search?part=snippet"
+            f"&q={requests.utils.quote(query)}&key={yt_key}&type=video&maxResults=1"
+        )
         try:
-            if yt_key:
-                for track in top_tracks:
-                    track_name = track.item.title
-                    candidate = attempt_youtube(track_name)
-                    if candidate:
-                        result = candidate
-                        break
-                    time.sleep(0.2)
-
-            if isinstance(result, dict) and not result.get("previewUrl") and not result.get("videoId"):
-                for track in top_tracks:
-                    track_name = track.item.title
-                    candidate = attempt_itunes(track_name)
-                    if candidate:
-                        result = candidate
-                        break
-
-            if isinstance(result, dict) and not result.get("previewUrl") and not result.get("videoId"):
-                fallback_candidate = attempt_itunes(None)
-                if fallback_candidate:
-                    result = fallback_candidate
+            yt_resp = requests.get(yt_url, timeout=10)
+            yt_resp.raise_for_status()
         except Exception as exc:  # pragma: no cover - network errors
-            self.logger.error(f"Prehear error: {exc}")
+            self.logger.error("YouTube search failed: %s", exc)
+            return None
+        yt_items = yt_resp.json().get("items", [])
+        if not yt_items:
+            return None
+        video_id = yt_items[0]["id"]["videoId"]
+        return {
+            "videoId": video_id,
+            "track": track_name,
+            "artist": artist_name,
+            "source": "youtube",
+        }
+
+    def _attempt_itunes_preview(
+        self,
+        artist_name: str,
+        track_name: Optional[str],
+    ) -> Optional[Dict[str, str]]:
+        """Attempt to resolve an iTunes audio preview for an artist-track pair."""
+        search_term = f"{artist_name} {track_name}" if track_name else artist_name
+        params = {
+            "term": search_term,
+            "entity": "musicTrack",
+            "limit": 5,
+            "media": "music",
+        }
+        try:
+            response = requests.get("https://itunes.apple.com/search", params=params, timeout=10)
+            response.raise_for_status()
+        except Exception as exc:  # pragma: no cover - network errors
+            self.logger.error("iTunes lookup failed: %s", exc)
+            return None
+        for entry in response.json().get("results", []):
+            preview_url = entry.get("previewUrl")
+            if not preview_url:
+                continue
+            return {
+                "previewUrl": preview_url,
+                "track": entry.get("trackName") or (track_name or artist_name),
+                "artist": entry.get("artistName") or artist_name,
+                "source": "itunes",
+            }
+        return None
+
+    def _resolve_audio_preview(
+        self,
+        artist_name: str,
+        top_tracks: Sequence[Any],
+        yt_key: str,
+    ) -> Dict[str, str]:
+        """Resolve the best available preview source using YouTube, then iTunes fallbacks."""
+        result: Dict[str, str] = {"error": "No sample found"}
+        if yt_key:
+            for track in top_tracks:
+                track_name = track.item.title
+                candidate = self._attempt_youtube_preview(artist_name, track_name, yt_key)
+                if candidate:
+                    return candidate
+                time.sleep(0.2)
+
+        for track in top_tracks:
+            track_name = track.item.title
+            candidate = self._attempt_itunes_preview(artist_name, track_name)
+            if candidate:
+                return candidate
+
+        fallback_candidate = self._attempt_itunes_preview(artist_name, None)
+        if fallback_candidate:
+            return fallback_candidate
+        return result
+
+    def prehear(self, sid: str, raw_artist_name: str) -> None:
+        artist_name = urllib.parse.unquote(raw_artist_name)
+        yt_key = (self.youtube_api_key or "").strip()
+        top_tracks = self._fetch_lastfm_top_tracks(artist_name)
+        try:
+            result = self._resolve_audio_preview(artist_name, top_tracks, yt_key)
+        except Exception as exc:  # pragma: no cover - network errors
+            self.logger.error("Prehear error: %s", exc)
             result = {"error": str(exc)}
 
         self.socketio.emit("prehear_result", result, room=sid)
 
     # Utilities -------------------------------------------------------
+    @staticmethod
+    def _extract_top_genres(artist_obj: Any) -> str:
+        """Extract up to five title-cased top tag names for a Last.fm artist object."""
+        try:
+            tags = [tag.item.get_name().title() for tag in artist_obj.get_top_tags()[:5]]
+        except Exception:
+            tags = []
+        return ", ".join(tags) or "Unknown Genre"
+
+    @staticmethod
+    def _safe_artist_metric(artist_obj: Any, attr: str) -> int:
+        """Read numeric artist metrics while tolerating provider-side errors."""
+        getter = getattr(artist_obj, attr, None)
+        if not callable(getter):
+            return 0
+        try:
+            return getter() or 0
+        except Exception:
+            return 0
+
+    @staticmethod
+    def _resolve_artist_image(artist_name: str) -> Optional[str]:
+        """Resolve an artist image URL from Deezer search results."""
+        try:
+            response = requests.get(
+                "https://api.deezer.com/search/artist",
+                params={"q": artist_name},
+                timeout=10,
+            )
+            response.raise_for_status()
+            data = response.json()
+            if not data.get("data"):
+                return None
+            artist_info = data["data"][0]
+            return (
+                artist_info.get("picture_xl")
+                or artist_info.get("picture_large")
+                or artist_info.get("picture_medium")
+                or artist_info.get("picture")
+            )
+        except Exception:
+            return None
+
+    @staticmethod
+    def _resolve_display_artist_name(artist_obj: Any, fallback: str) -> str:
+        """Resolve a human-readable artist name from Last.fm payload attributes."""
+        try:
+            if hasattr(artist_obj, "get_name"):
+                return artist_obj.get_name() or fallback
+            if hasattr(artist_obj, "name"):
+                return artist_obj.name or fallback
+        except Exception:
+            return fallback
+        return fallback
+
     def _fetch_artist_payload(
         self,
         lfm_network: pylast.LastFMNetwork,
@@ -1554,39 +1703,10 @@ class DataHandler:
             self.logger.error("Failed to load artist '%s' from Last.fm: %s", artist_name, exc)
             return None
 
-        try:
-            tags = [tag.item.get_name().title() for tag in artist_obj.get_top_tags()[:5]]
-        except Exception:
-            tags = []
-        genres = ", ".join(tags) or "Unknown Genre"
-
-        try:
-            listeners = artist_obj.get_listener_count() or 0
-        except Exception:
-            listeners = 0
-
-        try:
-            play_count = artist_obj.get_playcount() or 0
-        except Exception:
-            play_count = 0
-
-        img_link = None
-        try:
-            endpoint = "https://api.deezer.com/search/artist"
-            params = {"q": artist_name}
-            response = requests.get(endpoint, params=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            if data.get("data"):
-                artist_info = data["data"][0]
-                img_link = (
-                    artist_info.get("picture_xl")
-                    or artist_info.get("picture_large")
-                    or artist_info.get("picture_medium")
-                    or artist_info.get("picture")
-                )
-        except Exception:
-            img_link = None
+        genres = self._extract_top_genres(artist_obj)
+        listeners = self._safe_artist_metric(artist_obj, "get_listener_count")
+        play_count = self._safe_artist_metric(artist_obj, "get_playcount")
+        img_link = self._resolve_artist_image(artist_name)
 
         similarity_label = None
         clamped_similarity = None
@@ -1594,14 +1714,7 @@ class DataHandler:
             clamped_similarity = max(0.0, min(1.0, similarity_score))
             similarity_label = f"Similarity: {clamped_similarity * 100:.1f}%"
 
-        display_name = artist_name
-        try:
-            if hasattr(artist_obj, "get_name"):
-                display_name = artist_obj.get_name() or artist_name
-            elif hasattr(artist_obj, "name"):
-                display_name = artist_obj.name or artist_name
-        except Exception:
-            display_name = artist_name
+        display_name = self._resolve_display_artist_name(artist_obj, artist_name)
 
         return {
             "Name": display_name,
@@ -1905,9 +2018,10 @@ class DataHandler:
 
         return mbid
 
-    def load_environ_or_config_settings(self) -> None:
-        """Load settings from environment and config file with deterministic defaults."""
-        default_settings = {
+    @staticmethod
+    def _default_settings() -> Dict[str, Any]:
+        """Return deterministic default values applied after env and config merges."""
+        return {
             "lidarr_address": "",
             "lidarr_api_key": "",
             "root_folder_path": "/data/media/music/",
@@ -1942,80 +2056,74 @@ class DataHandler:
             "sonobarr_superadmin_reset": "false",
         }
 
-        self.lidarr_address = self._env("lidarr_address")
-        self.lidarr_api_key = self._env("lidarr_api_key")
-        self.youtube_api_key = self._env("youtube_api_key")
-        self.root_folder_path = self._env("root_folder_path")
+    def _env_bool_or_empty(self, key: str) -> Any:
+        raw = self._env(key)
+        if raw == "":
+            return ""
+        parsed = self._coerce_bool(raw)
+        return parsed if parsed is not None else ""
 
-        fallback_to_top_result = self._env("fallback_to_top_result")
-        self.fallback_to_top_result = (
-            fallback_to_top_result.lower() == "true" if fallback_to_top_result != "" else ""
+    def _env_int_or_empty(self, key: str) -> Any:
+        raw = self._env(key)
+        if raw == "":
+            return ""
+        parsed = self._coerce_int(raw)
+        return parsed if parsed is not None else ""
+
+    def _env_float_or_empty(self, key: str) -> Any:
+        raw = self._env(key)
+        if raw == "":
+            return ""
+        parsed = self._coerce_float(raw)
+        return parsed if parsed is not None else ""
+
+    def _load_environment_overrides(self) -> None:
+        """Populate runtime settings from environment variables before config file merge."""
+        string_fields = (
+            "lidarr_address",
+            "lidarr_api_key",
+            "youtube_api_key",
+            "root_folder_path",
+            "app_name",
+            "app_rev",
+            "app_url",
+            "last_fm_api_key",
+            "last_fm_api_secret",
+            "openai_api_key",
+            "openai_model",
+            "openai_api_base",
+            "openai_extra_headers",
+            "api_key",
         )
+        for attr in string_fields:
+            setattr(self, attr, self._env(attr))
 
-        lidarr_api_timeout = self._env("lidarr_api_timeout")
-        self.lidarr_api_timeout = float(lidarr_api_timeout) if lidarr_api_timeout else ""
-
-        quality_profile_id = self._env("quality_profile_id")
-        self.quality_profile_id = int(quality_profile_id) if quality_profile_id else ""
-
-        metadata_profile_id = self._env("metadata_profile_id")
-        self.metadata_profile_id = int(metadata_profile_id) if metadata_profile_id else ""
-
-        search_for_missing_albums = self._env("search_for_missing_albums")
-        self.search_for_missing_albums = (
-            search_for_missing_albums.lower() == "true" if search_for_missing_albums != "" else ""
-        )
-
-        dry_run_adding_to_lidarr = self._env("dry_run_adding_to_lidarr")
-        self.dry_run_adding_to_lidarr = (
-            dry_run_adding_to_lidarr.lower() == "true" if dry_run_adding_to_lidarr != "" else ""
-        )
+        self.fallback_to_top_result = self._env_bool_or_empty("fallback_to_top_result")
+        self.lidarr_api_timeout = self._env_float_or_empty("lidarr_api_timeout")
+        self.quality_profile_id = self._env_int_or_empty("quality_profile_id")
+        self.metadata_profile_id = self._env_int_or_empty("metadata_profile_id")
+        self.search_for_missing_albums = self._env_bool_or_empty("search_for_missing_albums")
+        self.dry_run_adding_to_lidarr = self._env_bool_or_empty("dry_run_adding_to_lidarr")
 
         monitor_option_env = self._env("lidarr_monitor_option")
         self.lidarr_monitor_option = (
             self._normalize_monitor_option(monitor_option_env) if monitor_option_env else ""
         )
-
         monitor_new_items_env = self._env("lidarr_monitor_new_items")
         self.lidarr_monitor_new_items = (
             self._normalize_monitor_new_items(monitor_new_items_env) if monitor_new_items_env else ""
         )
-
-        monitored_env = self._env("lidarr_monitored")
-        if monitored_env == "":
-            self.lidarr_monitored = ""
-        else:
-            monitored_bool = self._coerce_bool(monitored_env)
-            self.lidarr_monitored = monitored_bool if monitored_bool is not None else ""
-
+        self.lidarr_monitored = self._env_bool_or_empty("lidarr_monitored")
         albums_env = self._env("lidarr_albums_to_monitor")
-        self.lidarr_albums_to_monitor = (
-            self._parse_albums_to_monitor(albums_env) if albums_env else ""
-        )
+        self.lidarr_albums_to_monitor = self._parse_albums_to_monitor(albums_env) if albums_env else ""
 
-        self.app_name = self._env("app_name")
-        self.app_rev = self._env("app_rev")
-        self.app_url = self._env("app_url")
-        self.last_fm_api_key = self._env("last_fm_api_key")
-        self.last_fm_api_secret = self._env("last_fm_api_secret")
-        self.openai_api_key = self._env("openai_api_key")
-        self.openai_model = self._env("openai_model")
-        self.openai_api_base = self._env("openai_api_base")
-        self.openai_extra_headers = self._env("openai_extra_headers")
-        openai_max_seed = self._env("openai_max_seed_artists")
-        self.openai_max_seed_artists = int(openai_max_seed) if openai_max_seed else ""
-        self.api_key = self._env("api_key")
+        self.openai_max_seed_artists = self._env_int_or_empty("openai_max_seed_artists")
+        self.auto_start = self._env_bool_or_empty("auto_start")
+        self.auto_start_delay = self._env_float_or_empty("auto_start_delay")
+        self.similar_artist_batch_size = self._env_int_or_empty("similar_artist_batch_size")
 
-        auto_start = self._env("auto_start")
-        self.auto_start = auto_start.lower() == "true" if auto_start != "" else ""
-
-        auto_start_delay = self._env("auto_start_delay")
-        self.auto_start_delay = float(auto_start_delay) if auto_start_delay else ""
-
-        similar_artist_batch_size = self._env("similar_artist_batch_size")
-        if similar_artist_batch_size:
-            self.similar_artist_batch_size = similar_artist_batch_size
-
+    def _load_superadmin_environment(self, default_settings: Dict[str, Any]) -> None:
+        """Load bootstrap super-admin values from environment with deterministic defaults."""
         superadmin_username = self._env("sonobarr_superadmin_username")
         superadmin_password = self._env("sonobarr_superadmin_password")
         superadmin_display_name = self._env("sonobarr_superadmin_display_name")
@@ -2027,23 +2135,29 @@ class DataHandler:
         reset_raw = (superadmin_reset or "").strip().lower()
         self.superadmin_reset_flag = reset_raw in {"1", "true", "yes"}
 
+    def _merge_config_file_overrides(self) -> None:
+        """Overlay settings from the JSON config file for values not set via environment."""
         try:
-            if self.settings_config_file.exists():
-                self.logger.info("Loading Config via file")
-                with self.settings_config_file.open("r", encoding="utf-8") as json_file:
-                    ret = json.load(json_file)
-                    for key in ret:
-                        if getattr(self, key, "") == "":
-                            setattr(self, key, ret[key])
+            if not self.settings_config_file.exists():
+                return
+            self.logger.info("Loading Config via file")
+            with self.settings_config_file.open("r", encoding="utf-8") as json_file:
+                ret = json.load(json_file)
+                for key in ret:
+                    if getattr(self, key, "") == "":
+                        setattr(self, key, ret[key])
         except Exception as exc:  # pragma: no cover - filesystem errors
             self.logger.error(f"Error Loading Config: {exc}")
 
-        self.openai_extra_headers = self._normalize_openai_headers_field(self.openai_extra_headers)
-
+    def _apply_missing_defaults(self, default_settings: Dict[str, Any]) -> None:
+        """Fill unset settings with deterministic defaults."""
         for key, value in default_settings.items():
             if getattr(self, key, "") == "":
                 setattr(self, key, value)
 
+    def _normalize_loaded_settings(self, default_settings: Dict[str, Any]) -> None:
+        """Coerce merged settings to expected runtime types and constraints."""
+        self.openai_extra_headers = self._normalize_openai_headers_field(self.openai_extra_headers)
         self.lidarr_monitor_option = self._normalize_monitor_option(self.lidarr_monitor_option)
         self.lidarr_monitor_new_items = self._normalize_monitor_new_items(self.lidarr_monitor_new_items)
         monitored_bool = self._coerce_bool(self.lidarr_monitored)
@@ -2070,6 +2184,14 @@ class DataHandler:
         except (TypeError, ValueError):
             self.lidarr_api_timeout = float(default_settings["lidarr_api_timeout"])
 
+    def load_environ_or_config_settings(self) -> None:
+        """Load settings from environment and config file with deterministic defaults."""
+        default_settings = self._default_settings()
+        self._load_environment_overrides()
+        self._load_superadmin_environment(default_settings)
+        self._merge_config_file_overrides()
+        self._apply_missing_defaults(default_settings)
+        self._normalize_loaded_settings(default_settings)
         self._configure_openai_client()
         self._configure_listening_services()
         self.save_config_to_file()

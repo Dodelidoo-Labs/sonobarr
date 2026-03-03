@@ -84,6 +84,11 @@ def _delete_user_from_form(form):
     flash(f"User '{user.username}' deleted.", "success")
 
 
+def _is_last_admin_demotion(user: User, new_admin_status: bool) -> bool:
+    """Return True when an admin edit would demote the final remaining admin."""
+    return user.is_admin and not new_admin_status and User.query.filter_by(is_admin=True).count() <= 1
+
+
 def _edit_user_from_form(form):
     """Update mutable user profile and access-control fields from admin input."""
 
@@ -111,13 +116,11 @@ def _edit_user_from_form(form):
     # Update admin status with validation
     new_admin_status = form.get("is_admin") == "on"
 
-    # Validate: can't remove last admin
-    if user.is_admin and not new_admin_status:
-        if User.query.filter_by(is_admin=True).count() <= 1:
-            flash("At least one administrator must remain.", "warning")
-            return
-
     # Apply admin status change
+    if _is_last_admin_demotion(user, new_admin_status):
+        flash("At least one administrator must remain.", "warning")
+        return
+
     if user.is_admin != new_admin_status:
         user.is_admin = new_admin_status
         status_text = "granted" if new_admin_status else "revoked"

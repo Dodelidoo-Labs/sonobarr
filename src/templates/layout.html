@@ -8,9 +8,11 @@
       try {
         const storedTheme = localStorage.getItem('theme');
         if (storedTheme === 'dark' || storedTheme === 'light') {
-          document.documentElement.setAttribute('data-bs-theme', storedTheme);
+          document.documentElement.dataset.bsTheme = storedTheme;
         }
-      } catch (_) {}
+      } catch (error) {
+        console.warn('Unable to restore stored theme.', error);
+      }
     })();
   </script>
   <title>{% block title %}Sonobarr{% endblock %}</title>
@@ -102,7 +104,7 @@
                     <div class="d-flex align-items-center gap-2">
                       <i class="fa fa-sun text-warning"></i>
                       <div class="form-check form-switch mb-0">
-                        <input class="form-check-input rounded" type="checkbox" id="theme-switch" aria-label="Toggle theme">
+                        <input class="form-check-input rounded" type="checkbox" id="theme-switch-auth" data-theme-switch="true" aria-label="Toggle theme">
                       </div>
                       <i class="fa fa-moon text-info"></i>
                     </div>
@@ -121,7 +123,7 @@
             <div class="topbar-theme-quick d-flex align-items-center gap-2 text-light">
               <i class="fa fa-sun small"></i>
               <div class="form-check form-switch mb-0">
-                <input class="form-check-input rounded" type="checkbox" id="theme-switch" aria-label="Toggle theme">
+                <input class="form-check-input rounded" type="checkbox" id="theme-switch-guest" data-theme-switch="true" aria-label="Toggle theme">
               </div>
               <i class="fa fa-moon small"></i>
             </div>
@@ -184,7 +186,7 @@
   {% block footer_scripts %}{% endblock %}
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      const switchEl = document.getElementById('theme-switch');
+      const switchEl = document.querySelector('[data-theme-switch]');
       if (!switchEl) {
         return;
       }
@@ -196,7 +198,7 @@
           localStorage.getItem('switch-position');
 
         if (storedTheme === 'dark' || storedTheme === 'light') {
-          document.documentElement.setAttribute('data-bs-theme', storedTheme);
+          document.documentElement.dataset.bsTheme = storedTheme;
         }
         if (storedPosition !== null) {
           switchEl.checked = storedPosition === 'true';
@@ -206,14 +208,16 @@
 
         switchEl.addEventListener('change', () => {
           const nextTheme = switchEl.checked ? 'dark' : 'light';
-          document.documentElement.setAttribute('data-bs-theme', nextTheme);
+          document.documentElement.dataset.bsTheme = nextTheme;
           localStorage.setItem('theme', nextTheme);
           localStorage.setItem('theme_switch_position', switchEl.checked ? 'true' : 'false');
         });
 
         localStorage.removeItem('switch_position');
         localStorage.removeItem('switch-position');
-      } catch (_) {}
+      } catch (error) {
+        console.warn('Unable to persist theme preference.', error);
+      }
     });
   </script>
   {% block extra_scripts %}{% endblock %}

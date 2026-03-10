@@ -408,20 +408,21 @@ class DataHandler:
         Uses user's API keys if set, otherwise falls back to global config.
         Returns None if no API key is available.
         """
+        user_has_custom_keys = user and (
+            getattr(user, 'openai_api_key', None) or
+            getattr(user, 'openai_api_base', None)
+        )
+
+        # If user has no custom keys, fall back to the global recommender directly
+        if not user_has_custom_keys and self.openai_recommender:
+            return self.openai_recommender
+
         api_key = (self.get_openai_api_key(user) or "").strip()
         base_url = (self.get_openai_api_base(user) or "").strip()
         env_api_key = os.environ.get("OPENAI_API_KEY", "").strip()
 
         if not any([api_key, base_url, env_api_key]):
             return None
-
-        # If user has no custom keys, use the global recommender
-        user_has_custom_keys = user and (
-            getattr(user, 'openai_api_key', None) or
-            getattr(user, 'openai_api_base', None)
-        )
-        if not user_has_custom_keys and self.openai_recommender:
-            return self.openai_recommender
 
         # Create a recommender with user's (or global) settings
         model = (self.get_openai_model(user) or "").strip() or None
@@ -854,23 +855,21 @@ class DataHandler:
         names = playlist_artists.artists if playlist_artists else []
         return [name for name in names if name]
 
-    def _personal_source_definitions(self, user=None) -> Dict[str, Dict[str, Any]]:
+    def _personal_source_definitions(self) -> Dict[str, Dict[str, Any]]:
         """Return source-specific metadata and loaders for personal recommendations."""
-        user_has_lastfm = bool(user and getattr(user, 'lastfm_api_key', None) and getattr(user, 'lastfm_api_secret', None))
-        lastfm_service_ready = bool(self.last_fm_user_service) or user_has_lastfm
         return {
             "lastfm": {
                 "label": "Last.fm",
                 "title": "Last.fm discovery",
                 "username_attr": "lastfm_username",
-                "service_ready": lastfm_service_ready,
+                "service_ready": bool(self.last_fm_user_service),
                 "service_missing_reason": (
                     "Administrator must configure a Last.fm API key and secret in Settings before this feature can be used."
                 ),
                 "missing_username_reason": (
                     "Add your Last.fm username under Profile → Listening services to use this feature."
                 ),
-                "fetch": lambda username: self._fetch_lastfm_personal_artists(username, user),
+                "fetch": self._fetch_lastfm_personal_artists,
                 "error_message": "We couldn't reach Last.fm right now. Please try again shortly.",
             },
             "listenbrainz": {
@@ -967,9 +966,8 @@ class DataHandler:
     def personal_recommendations(self, sid: str, source: str) -> None:
         session = self.ensure_session(sid)
         source_key = (source or "").strip().lower() or "lastfm"
-        user = self._resolve_user(session.user_id)
 
-        config = self._personal_source_definitions(user=user).get(source_key)
+        config = self._personal_source_definitions().get(source_key)
         if not config:
             self._emit_personal_error(
                 sid,
@@ -979,6 +977,7 @@ class DataHandler:
             )
             return
 
+        user = self._resolve_user(session.user_id)
         if not user:
             self._emit_personal_error(
                 sid,
@@ -987,6 +986,15 @@ class DataHandler:
                 title=config["title"],
             )
             return
+
+        # Allow BYO Last.fm keys to substitute for missing global service
+        if source_key == "lastfm" and not config["service_ready"]:
+            user_has_lastfm = bool(
+                getattr(user, 'lastfm_api_key', None) and getattr(user, 'lastfm_api_secret', None)
+            )
+            if user_has_lastfm:
+                config = dict(config, service_ready=True,
+                              fetch=lambda uname: self._fetch_lastfm_personal_artists(uname, user))
 
         if not config["service_ready"]:
             self._emit_personal_error(

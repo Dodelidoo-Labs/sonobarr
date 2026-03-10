@@ -37,6 +37,7 @@ Sonobarr marries your existing Lidarr library with Last.fm's discovery graph to 
 - ⚡️ **Real-time UX** - Socket.IO keeps discovery progress, toast alerts, and button states in sync across every connected client.
 - 👥 **Role-based access** - authentication, user management, profile controls for personal services, and admin-only settings live in one UI.
 - 🔐 **OIDC Single Sign-On** - enable OpenID Connect for authentication, with optional group-based admin assignment and "OIDC-only" mode.
+- 🔑 **Per-user API keys** - users can optionally bring their own Last.fm, YouTube, and LLM keys, with automatic fallback to admin-configured global keys.
 - 🛡️ **Hardened configuration** - atomic settings writes, locked-down file permissions, and CSRF-protected forms keep secrets safe.
 - 🔔 **Update & schema self-healing** - footer badges surface new releases and the app backfills missing DB columns before loading users.
 - 🐳 **Docker-first deployment** - official GHCR image, rootless-friendly UID/GID mapping, and automatic migrations on start.
@@ -183,7 +184,6 @@ When configuring your OIDC provider, you **must** register a Redirect URI (or Ca
 `https://[YOUR_SONOBARR_DOMAIN_OR_IP]/oidc/callback`
 
 For security, OIDC providers require `https` for all production URLs. For local development, most providers allow `http://localhost:[port]` as an exception.
-
 ---
 
 ## Using the app
